@@ -1,5 +1,4 @@
 streamlit
 seaborn
 scikit-learn
-sys
 matplotlib
