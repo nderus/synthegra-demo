@@ -1,59 +1,57 @@
 <!doctype html>
 <html>
-  <head>
+<head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>stlite app — demo</title>
+    <title>Synthegra Demo</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🧬</text></svg>" />
+    
+    <style>
+        /* Loading styles */
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-family: sans-serif;
+        }
+    </style>
+    
     <script type="module">
-      import { mount } from "https://cdn.jsdelivr.net/npm/stlite@latest/dist/stlite.js";
-
-      (async () => {
-        // Preload the Python packages you need in Pyodide
-        // Add/remove package names as needed. Example: matplotlib, seaborn, scikit-learn
-        const requirements = [
-          "matplotlib",
-          "seaborn",
-          "scikit-learn"
-        ];
-
-        // Helper to fetch a text file from the same repo
-        async function fetchText(path) {
-          const r = await fetch(path);
-          if (!r.ok) {
-            console.warn(`Could not fetch ${path}: ${r.status}`);
-            return null;
-          }
-          return await r.text();
-        }
-
-        // Build files dictionary for stlite.  Add any static files you want available to Python here.
-        const files = {};
-        const mainScript = "demo.py";
-
-        const mainText = await fetchText(mainScript);
-        if (!mainText) {
-          document.body.innerHTML = "<pre>Error: demo.py not found in repo root.</pre>";
-          return;
-        }
-        files[mainScript] = mainText;
-
-        // Example: if you have data/sample.csv in the repo, include it so pandas can read('data/sample.csv')
-        const sampleCsv = await fetchText("data/sample.csv");
-        if (sampleCsv !== null) files["data/sample.csv"] = sampleCsv;
-
-        mount({
-          mainScript,
-          // Tell Pyodide to load these packages before running demo.py.
-          // If you hit ModuleNotFoundError for a package, add it here.
-          requirements,
-          files
-        });
-      })();
+        import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/mountable@latest/build/stlite.js";
+        
+        // Fetch the external Python file
+        fetch("demo.py")
+            .then(response => response.text())
+            .then(code => {
+                mount({
+                    requirements: [
+                        "streamlit",
+                        "numpy", 
+                        "pandas",
+                        "matplotlib",
+                        "seaborn",
+                        "scikit-learn"
+                    ],
+                    entrypoint: "demo.py",
+                    files: {
+                        "demo.py": code
+                    }
+                }, document.getElementById("root"));
+            })
+            .catch(error => {
+                document.getElementById("root").innerHTML = `
+                    <div style="color: red; padding: 20px;">
+                        Error loading demo.py: ${error}
+                    </div>
+                `;
+            });
     </script>
-  </head>
-  <body>
-    <noscript>
-      This app requires JavaScript — please enable JavaScript in your browser.
-    </noscript>
-  </body>
+</head>
+<body>
+    <div id="root">
+        <div class="loading">
+            <h2>🧬 Loading Synthegra Demo...</h2>
+            <p>This may take 30-60 seconds on first load.</p>
+        </div>
+    </div>
+</body>
 </html>
