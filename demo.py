@@ -3,9 +3,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Add your project path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 # Page config
 st.set_page_config(page_title="Synthegra Demo", layout="wide")
 st.title("🧬 Synthegra: Multimodal Integration Benchmarking Framework")
