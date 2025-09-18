@@ -2,10 +2,6 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import train_test_split
-import sys
-import os
 
 # Add your project path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

@@ -5,22 +5,94 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Synthegra Demo</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🧬</text></svg>" />
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@stlite/mountable@latest/build/stlite.js">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
     
     <style>
-        /* Loading styles */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
         .loading {
             text-align: center;
             padding: 50px;
-            font-family: sans-serif;
+            color: white;
+        }
+        
+        .loading h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .loading-text {
+            font-size: 1.2rem;
+            margin-top: 2rem;
+        }
+        
+        .loading-text small {
+            display: block;
+            margin-top: 0.5rem;
+            opacity: 0.8;
+            font-size: 1rem;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            margin: 2rem auto;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
+</head>
+<body>
+    <div id="root">
+        <div class="loading">
+            <h2>🧬 Synthegra Demo</h2>
+            <p>Multimodal Integration Benchmarking Framework</p>
+            <div class="spinner"></div>
+            <div class="loading-text">
+                Loading packages<br>
+                <small>Typically takes 60-90s on first load</small>
+            </div>
+        </div>
+    </div>
     
     <script type="module">
         import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/mountable@latest/build/stlite.js";
         
-        // Fetch the external Python file
+        // Start loading timer
+        let startTime = Date.now();
+        let dots = 0;
+        const loadingInterval = setInterval(() => {
+            dots = (dots + 1) % 4;
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const loadingText = document.querySelector('.loading-text');
+            if (loadingText) {
+                loadingText.innerHTML = 
+                    `Loading packages${'.'.repeat(dots)}<br>
+                     <small>${elapsed}s elapsed - typically takes 60-90s on first load</small>`;
+            }
+        }, 500);
+        
+        // Fetch and mount the Python app
         fetch("demo.py")
-            .then(response => response.text())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.text();
+            })
             .then(code => {
                 mount({
                     requirements: [
@@ -28,30 +100,26 @@
                         "numpy", 
                         "pandas",
                         "matplotlib",
-                        "seaborn",
-                        "scikit-learn"
                     ],
                     entrypoint: "demo.py",
                     files: {
                         "demo.py": code
                     }
                 }, document.getElementById("root"));
+                
+                // Clear loading interval when mounted
+                clearInterval(loadingInterval);
             })
             .catch(error => {
+                clearInterval(loadingInterval);
                 document.getElementById("root").innerHTML = `
-                    <div style="color: red; padding: 20px;">
-                        Error loading demo.py: ${error}
+                    <div style="color: white; padding: 20px; text-align: center;">
+                        <h2>Error loading demo.py</h2>
+                        <p>${error}</p>
+                        <p style="margin-top: 2rem;">Make sure demo.py is in the same directory as index.html</p>
                     </div>
                 `;
             });
     </script>
-</head>
-<body>
-    <div id="root">
-        <div class="loading">
-            <h2>🧬 Loading Synthegra Demo...</h2>
-            <p>This may take 30-60 seconds on first load.</p>
-        </div>
-    </div>
 </body>
 </html>
