@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>stlite app — demo</title>
+    <script type="module">
+      import { mount } from "https://cdn.jsdelivr.net/npm/stlite@latest/dist/stlite.js";
+
+      (async () => {
+        // Preload the Python packages you need in Pyodide
+        // Add/remove package names as needed. Example: matplotlib, seaborn, scikit-learn
+        const requirements = [
+          "matplotlib",
+          "seaborn",
+          "scikit-learn"
+        ];
+
+        // Helper to fetch a text file from the same repo
+        async function fetchText(path) {
+          const r = await fetch(path);
+          if (!r.ok) {
+            console.warn(`Could not fetch ${path}: ${r.status}`);
+            return null;
+          }
+          return await r.text();
+        }
+
+        // Build files dictionary for stlite.  Add any static files you want available to Python here.
+        const files = {};
+        const mainScript = "demo.py";
+
+        const mainText = await fetchText(mainScript);
+        if (!mainText) {
+          document.body.innerHTML = "<pre>Error: demo.py not found in repo root.</pre>";
+          return;
+        }
+        files[mainScript] = mainText;
+
+        // Example: if you have data/sample.csv in the repo, include it so pandas can read('data/sample.csv')
+        const sampleCsv = await fetchText("data/sample.csv");
+        if (sampleCsv !== null) files["data/sample.csv"] = sampleCsv;
+
+        mount({
+          mainScript,
+          // Tell Pyodide to load these packages before running demo.py.
+          // If you hit ModuleNotFoundError for a package, add it here.
+          requirements,
+          files
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <noscript>
+      This app requires JavaScript — please enable JavaScript in your browser.
+    </noscript>
+  </body>
+</html>
