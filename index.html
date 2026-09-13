@@ -1,125 +1,356 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Synthegra Demo</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🧬</text></svg>" />
-    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@stlite/mountable@latest/build/stlite.js">
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 50px;
-            color: white;
-        }
-        
-        .loading h2 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-        }
-        
-        .loading-text {
-            font-size: 1.2rem;
-            margin-top: 2rem;
-        }
-        
-        .loading-text small {
-            display: block;
-            margin-top: 0.5rem;
-            opacity: 0.8;
-            font-size: 1rem;
-        }
-        
-        .spinner {
-            width: 50px;
-            height: 50px;
-            margin: 2rem auto;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synthegra · when does multi-omic fusion help?</title>
+<meta name="description" content="Interactive, precomputed results from Synthegra: a synthetic benchmark for multimodal survival integration with known information structure.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%232F434A'/><circle cx='38' cy='50' r='22' fill='%2399AB9F' opacity='.9'/><circle cx='62' cy='50' r='22' fill='%23BD2B0B' opacity='.8'/></svg>">
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<style>
+  :root{
+    --ink:#1e1e1e; --slate:#2F434A; --sage:#99AB9F; --sage-light:#e6ede8; --cream:#FEF2E6;
+    --rust:#BD2B0B; --grey:#6b6b6b; --line:#e3e3e3; --bg:#fbfaf7;
+    --c-single:#9a9a9a; --c-early:#99AB9F; --c-inter:#2F434A; --c-late:#d9a066;
+    --c-R:#6f8fbf; --c-U:#7fb28a; --c-S:#BD2B0B;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;overflow-x:hidden;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{background:var(--slate);color:#fff;padding:18px 20px}
+  header .wrap{max-width:1100px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px}
+  header h1{font-size:1.35rem;margin:0;font-weight:700;letter-spacing:.2px}
+  header p{margin:0;opacity:.85;font-size:.95rem}
+  main{max-width:1100px;margin:0 auto;padding:16px 16px 48px}
+  nav.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 18px}
+  nav.tabs button{border:1px solid var(--line);background:#fff;padding:10px 14px;border-radius:999px;font-size:.95rem;cursor:pointer;color:var(--slate)}
+  nav.tabs button[aria-selected="true"]{background:var(--slate);color:#fff;border-color:var(--slate)}
+  section.story{display:none}
+  section.story[data-active="true"]{display:block}
+  h2{font-size:1.35rem;margin:6px 0 4px;color:var(--slate)}
+  .lead{color:var(--grey);margin:0 0 14px}
+  .grid{display:grid;grid-template-columns:320px 1fr;gap:18px}
+  @media (max-width:820px){.grid{grid-template-columns:1fr}}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .panel h3{margin:0 0 10px;font-size:1rem;color:var(--slate)}
+  .slider{margin:10px 0 14px}
+  .slider label{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:4px}
+  .slider label b{color:var(--rust)}
+  .slider input[type=range]{width:100%;accent-color:var(--rust)}
+  .slider small{color:var(--grey);display:block;font-size:.8rem}
+  .takeaway{background:var(--cream);border-left:4px solid var(--rust);padding:10px 14px;border-radius:8px;margin:12px 0;font-size:1.02rem}
+  .meter{margin-top:8px}
+  .meter .row{display:grid;grid-template-columns:110px 1fr 52px;align-items:center;gap:8px;margin:6px 0;font-size:.9rem}
+  .meter .bar{height:14px;background:var(--sage-light);border-radius:7px;overflow:hidden}
+  .meter .bar i{display:block;height:100%;border-radius:7px}
+  .meter .R i{background:var(--c-R)} .meter .U i{background:var(--c-U)} .meter .S i{background:var(--c-S)}
+  .chart{width:100%;min-height:340px}
+  details{margin:10px 0;border:1px solid var(--line);border-radius:10px;background:#fff}
+  details summary{cursor:pointer;padding:10px 14px;font-weight:600;color:var(--slate)}
+  details .body{padding:0 14px 12px;color:#333;font-size:.95rem}
+  dl.gloss dt{font-weight:700;margin-top:8px} dl.gloss dd{margin:2px 0 0 0}
+  .num{font-variant-numeric:tabular-nums}
+  .stat{display:flex;gap:18px;flex-wrap:wrap;margin:8px 0}
+  .stat div{background:var(--sage-light);border-radius:10px;padding:10px 14px;min-width:150px}
+  .stat b{display:block;font-size:1.4rem;color:var(--slate)}
+  .stat span{color:var(--grey);font-size:.85rem}
+  footer{max-width:1100px;margin:0 auto;padding:18px 16px 40px;color:var(--grey);font-size:.85rem;border-top:1px solid var(--line)}
+  footer a{color:var(--slate)}
+  .links a{display:inline-block;margin:4px 10px 4px 0;padding:8px 12px;border:1px solid var(--slate);border-radius:8px;text-decoration:none;color:var(--slate);font-weight:600}
+  .warn{color:var(--rust);font-size:.9rem}
+  img.fig{max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .loading{color:var(--grey);padding:20px}
+</style>
 </head>
 <body>
-    <div id="root">
-        <div class="loading">
-            <h2>🧬 Synthegra Demo</h2>
-            <p>Multimodal Integration Benchmarking Framework</p>
-            <div class="spinner"></div>
-            <div class="loading-text">
-                Loading packages<br>
-                <small>Typically takes 60-90s on first load</small>
-            </div>
+<header><div class="wrap">
+  <h1>Synthegra</h1>
+  <p>When does multi-omic fusion help survival prediction? Precomputed results from a benchmark with known ground truth.</p>
+</div></header>
+
+<main>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="fusion">1 · When does fusion help?</button>
+    <button role="tab" aria-selected="false" data-tab="resolution">2 · Can you measure synergy at your cohort size?</button>
+    <button role="tab" aria-selected="false" data-tab="calibration">3 · Does synthetic survival look real?</button>
+  </nav>
+
+  <!-- ---------------------------------------------------------------- story 1 -->
+  <section class="story" id="fusion" data-active="true">
+    <h2>When does fusion help?</h2>
+    <p class="lead">Move the sliders to change how the two data layers relate to survival. Every bar is a simulated cohort with known structure, scored on held-out patients. Bars show the mean over seeds, whiskers the seed-to-seed spread, the dashed line the oracle that knows the true risk.</p>
+    <div class="grid">
+      <div class="panel">
+        <h3>Planted structure</h3>
+        <div class="slider">
+          <label><span>Synergy (interaction between layers)</span><b id="v-synergy"></b></label>
+          <input type="range" id="s-synergy" min="0" max="0" step="1" value="0">
+          <small>Risk that appears only when both layers are read together</small>
         </div>
+        <div class="slider">
+          <label><span>Shared signal (redundancy)</span><b id="v-shared"></b></label>
+          <input type="range" id="s-shared" min="0" max="0" step="1" value="0">
+          <small>Fraction of the latent risk factors visible in both layers</small>
+        </div>
+        <div class="slider">
+          <label><span>Cohort size</span><b id="v-n"></b></label>
+          <input type="range" id="s-n" min="0" max="0" step="1" value="0">
+          <small>Patients in the simulated cohort</small>
+        </div>
+        <h3>What is planted, exactly</h3>
+        <div class="meter" id="planted">
+          <div class="row"><span>Shared factors</span><div class="bar"><i id="m-shared" style="background:var(--c-R)"></i></div><span class="num" id="t-shared"></span></div>
+          <div class="row"><span>Unique / layer</span><div class="bar"><i id="m-unique" style="background:var(--c-U)"></i></div><span class="num" id="t-unique"></span></div>
+          <div class="row"><span>Interactions</span><div class="bar"><i id="m-int" style="background:var(--c-S)"></i></div><span class="num" id="t-int"></span></div>
+        </div>
+        <small style="color:var(--grey)" id="planted-note"></small>
+      </div>
+      <div>
+        <div class="panel">
+          <div id="chart-fusion" class="chart"></div>
+        </div>
+        <div class="takeaway" id="take-fusion">…</div>
+      </div>
     </div>
-    
-    <script type="module">
-        import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/mountable@latest/build/stlite.js";
-        
-        // Start loading timer
-        let startTime = Date.now();
-        let dots = 0;
-        const loadingInterval = setInterval(() => {
-            dots = (dots + 1) % 4;
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            const loadingText = document.querySelector('.loading-text');
-            if (loadingText) {
-                loadingText.innerHTML = 
-                    `Loading packages${'.'.repeat(dots)}<br>
-                     <small>${elapsed}s elapsed - typically takes 60-90s on first load</small>`;
-            }
-        }, 500);
-        
-        // Fetch and mount the Python app
-        fetch("demo.py")
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.text();
-            })
-            .then(code => {
-                mount({
-                    requirements: [
-                        "streamlit",
-                        "numpy", 
-                        "pandas",
-                        "matplotlib",
-                    ],
-                    entrypoint: "demo.py",
-                    files: {
-                        "demo.py": code
-                    }
-                }, document.getElementById("root"));
-                
-                // Clear loading interval when mounted
-                clearInterval(loadingInterval);
-            })
-            .catch(error => {
-                clearInterval(loadingInterval);
-                document.getElementById("root").innerHTML = `
-                    <div style="color: white; padding: 20px; text-align: center;">
-                        <h2>Error loading demo.py</h2>
-                        <p>${error}</p>
-                        <p style="margin-top: 2rem;">Make sure demo.py is in the same directory as index.html</p>
-                    </div>
-                `;
-            });
-    </script>
+    <details><summary>How to read this</summary><div class="body">
+      <dl class="gloss">
+        <dt>C-index</dt><dd>Take any two patients. Does the model correctly say who has the event first? 0.5 is a coin flip, 1.0 is perfect. Real prognostic models sit between 0.6 and 0.85.</dd>
+        <dt>Best single layer</dt><dd>The better of the two layers used alone. Fusion has to beat this to be worth its cost.</dd>
+        <dt>Late fusion (vote)</dt><dd>Each specialist votes: one model per layer, average the risk scores. Cannot see interactions between layers.</dd>
+        <dt>Early fusion, linear</dt><dd>Pile every report on one desk and fit a Cox model: every feature adds its own risk, nothing multiplies.</dd>
+        <dt>Early fusion, non-linear</dt><dd>Same desk, but a model (boosted survival trees) that can learn "this mutation matters only when that pathway is high".</dd>
+        <dt>Oracle</dt><dd>The C-index you would get if you knew the true risk of every simulated patient. The ceiling for this cohort.</dd>
+        <dt>Shared · unique · interaction</dt><dd>Two witnesses to the same event. Shared: both tell the same story. Unique: only one saw it. Interaction: the clue appears only when the two stories are combined (synergy).</dd>
+      </dl>
+    </div></details>
+    <details><summary>How these numbers were computed</summary><div class="body" id="prov-fusion">…</div></details>
+  </section>
+
+  <!-- ---------------------------------------------------------------- story 2 -->
+  <section class="story" id="resolution">
+    <h2>Can you measure synergy at your cohort size?</h2>
+    <p class="lead">Fusion methods are built on the assumption that synergy exists. But an estimate of synergy has a resolution limit set by the number of patients. Enter your cohort size and see how far the measurement spreads across random seeds for the same planted structure.</p>
+    <div class="grid">
+      <div class="panel">
+        <h3>Your cohort</h3>
+        <div class="slider">
+          <label><span>Patients</span><b id="v-nres"></b></label>
+          <input type="range" id="s-nres" min="100" max="3000" step="1" value="369">
+          <small>Typical single-centre haematology cohorts: 200–600. The MDS → AML cohort in the talk has 369. Below the smallest simulated size the curve is held flat.</small>
+        </div>
+        <div class="stat">
+          <div><b id="st-mean" class="num">–</b><span>mean measured synergy (bits)</span></div>
+          <div><b id="st-spread" class="num">–</b><span>95% interval across seeds</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="panel"><div id="chart-res" class="chart"></div></div>
+        <div class="takeaway" id="take-res">…</div>
+      </div>
+    </div>
+    <details><summary>Why this matters</summary><div class="body">
+      <p>If the interval at your cohort size includes zero, a null result on synergy is uninformative: the instrument cannot resolve it. Synergy in real cancer cohorts appears to be real but focal, concentrated in a few driver-gene interactions, and it becomes visible only as cohorts grow. At typical sizes, look for synergy in specific interactions rather than everywhere.</p>
+    </div></details>
+    <details><summary>How these numbers were computed</summary><div class="body" id="prov-res">…</div></details>
+  </section>
+
+  <!-- ---------------------------------------------------------------- story 3 -->
+  <section class="story" id="calibration">
+    <h2>Does synthetic survival look real?</h2>
+    <p class="lead">The generator is calibrated so that synthetic cohorts reproduce the survival distribution of a real myeloid-neoplasm cohort. This is a calibration check, not a claim that synthetic data replaces real patients.</p>
+    <div class="grid">
+      <div class="panel">
+        <h3>Calibration check</h3>
+        <div class="stat">
+          <div><b class="num">p = 0.91</b><span>log-rank, real vs synthetic</span></div>
+        </div>
+        <p style="font-size:.95rem">Kaplan-Meier curves of a real MDS/AML cohort and a synthetic cohort generated with the same censoring mechanism and baseline hazard. Shaded bands are 95% confidence intervals.</p>
+        <p class="warn">Synthetic cohorts are for benchmarking methods, not for clinical inference or for sharing in place of patient data.</p>
+      </div>
+      <div class="panel">
+        <img class="fig" src="figures/synthegra_km.png" alt="Kaplan-Meier curves, real versus synthetic survival, log-rank p = 0.909">
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="links">
+    <a href="https://github.com/nderus/synthegra">Synthegra code</a>
+    <a href="https://github.com/nderus/neural-frailty-survival">Neural frailty model</a>
+    <a href="https://nderus.github.io">Nicolas Derus</a>
+  </div>
+  <p id="foot-prov">Nicolas Derus · DIMEC, University of Bologna. Results precomputed with Synthegra; see each tab's "How these numbers were computed".</p>
+</footer>
+
+<script>
+window.addEventListener('error', e => { const m = document.querySelector('main'); if (m) m.insertAdjacentHTML('afterbegin', '<p class="warn" id="jserr">Page script error: ' + e.message + ' (line ' + e.lineno + ')</p>'); });
+window.addEventListener('unhandledrejection', e => { const m = document.querySelector('main'); if (m) m.insertAdjacentHTML('afterbegin', '<p class="warn" id="jserr">Page script error: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason) + '</p>'); });
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const fmt = (x, d = 2) => (x === null || x === undefined || Number.isNaN(x)) ? '–' : Number(x).toFixed(d);
+
+  // ---- tabs
+  document.querySelectorAll('nav.tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b === btn));
+      document.querySelectorAll('section.story').forEach(s => s.dataset.active = (s.id === btn.dataset.tab));
+      history.replaceState(null, '', '#' + btn.dataset.tab);
+      if (window.__redraw) window.__redraw();
+    });
+  });
+  if (location.hash) { const b = document.querySelector(`nav.tabs button[data-tab="${location.hash.slice(1)}"]`); if (b) b.click(); }
+
+  const layoutBase = {
+    margin: { l: 56, r: 16, t: 28, b: 56 }, paper_bgcolor: '#fff', plot_bgcolor: '#fff',
+    font: { family: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif', size: 13, color: '#1e1e1e' },
+    hovermode: 'closest', showlegend: false,
+  };
+  const cfg = { displayModeBar: false, responsive: true };
+
+  let grid, res;
+  try {
+    [grid, res] = await Promise.all([
+      fetch('data/grid.json').then(r => r.json()),
+      fetch('data/resolution.json').then(r => r.json()),
+    ]);
+  } catch (e) {
+    document.querySelector('main').insertAdjacentHTML('afterbegin',
+      '<p class="warn">Could not load data/grid.json or data/resolution.json. If you opened this file directly, serve the folder over HTTP (e.g. <code>python3 -m http.server</code>).</p>');
+    return;
+  }
+
+  // =============================================================== story 1
+  const ax = grid.axes;                       // {synergy:[...], shared:[...], n:[...]}
+  const key = (s, r, n) => `${s}|${r}|${n}`;
+  const cells = new Map(grid.cells.map(c => [key(c.synergy, c.shared, c.n), c]));
+
+  const sl = { synergy: $('s-synergy'), shared: $('s-shared'), n: $('s-n') };
+  for (const k of Object.keys(sl)) {
+    sl[k].max = ax[k].length - 1;
+    sl[k].value = grid.defaults && grid.defaults[k] !== undefined ? ax[k].indexOf(grid.defaults[k]) : Math.floor(ax[k].length / 2);
+    sl[k].addEventListener('input', drawFusion);
+  }
+
+  const isVisible = (id) => $(id).offsetParent !== null;
+  const lab = (axis, v) => (grid.labels?.[axis]?.[String(v)] ?? grid.labels?.[axis]?.[Number(v).toFixed(1)] ?? v);
+  const MODELS = grid.meta.models;   // [{key,label,color}]
+  const maxShared = Math.max(...grid.cells.map(c => c.planted.n_shared));
+  const maxUnique = Math.max(...grid.cells.map(c => c.planted.n_unique_per_mod));
+  const maxStrength = Math.max(...grid.cells.map(c => c.planted.strength));
+
+  function drawFusion() {
+    if (!isVisible('chart-fusion')) return;
+    const s = ax.synergy[+sl.synergy.value], r = ax.shared[+sl.shared.value], n = ax.n[+sl.n.value];
+    $('v-synergy').textContent = lab('synergy', s);
+    $('v-shared').textContent = lab('shared', r);
+    $('v-n').textContent = n;
+    const c = cells.get(key(s, r, n));
+    if (!c) { $('take-fusion').textContent = 'No simulation for this combination.'; return; }
+
+    const x = MODELS.map(m => m.label);
+    const y = MODELS.map(m => c.cindex[m.key][0]);
+    const lo = MODELS.map(m => c.cindex[m.key][0] - c.cindex[m.key][1]);
+    const hi = MODELS.map(m => c.cindex[m.key][2] - c.cindex[m.key][0]);
+    const oracle = c.cindex.oracle ? c.cindex.oracle[0] : null;
+    const ymin = Math.max(0.4, Math.min(...MODELS.map(m => c.cindex[m.key][1])) - 0.03);
+    const ymax = Math.min(1.0, Math.max(oracle || 0, ...MODELS.map(m => c.cindex[m.key][2])) + 0.05);
+    Plotly.react('chart-fusion', [{
+      type: 'bar', x, y, marker: { color: MODELS.map(m => m.color) },
+      error_y: { type: 'data', array: hi, arrayminus: lo, visible: true, color: '#1e1e1e', thickness: 1.2, width: 6 },
+      text: y.map(v => fmt(v)), textposition: 'outside', cliponaxis: false,
+      hovertemplate: '%{x}<br>C-index %{y:.3f}<extra></extra>',
+    }], {
+      ...layoutBase, title: { text: `Held-out C-index · ${c.seeds} seeds · event rate ${Math.round(100 * c.event_rate)} %`, font: { size: 14 }, x: 0 },
+      yaxis: { range: [ymin, ymax], title: 'C-index', gridcolor: '#eee', zeroline: false },
+      xaxis: { tickfont: { size: 12 } },
+      shapes: [
+        { type: 'line', x0: -0.5, x1: MODELS.length - 0.5, y0: y[0], y1: y[0], line: { color: '#9a9a9a', dash: 'dot', width: 1 } },
+        ...(oracle ? [{ type: 'line', x0: -0.5, x1: MODELS.length - 0.5, y0: oracle, y1: oracle, line: { color: '#BD2B0B', dash: 'dash', width: 1.5 } }] : []),
+      ],
+      annotations: oracle ? [{ x: MODELS.length - 0.5, y: oracle, text: `oracle ${fmt(oracle)}`, showarrow: false, xanchor: 'right', yanchor: 'bottom', font: { size: 11, color: '#BD2B0B' } }] : [],
+    }, cfg);
+
+    // planted structure readout
+    const p = c.planted;
+    $('m-shared').style.width = `${Math.max(2, 100 * p.n_shared / Math.max(1, maxShared))}%`; $('t-shared').textContent = p.n_shared;
+    $('m-unique').style.width = `${Math.max(2, 100 * p.n_unique_per_mod / Math.max(1, maxUnique))}%`; $('t-unique').textContent = p.n_unique_per_mod;
+    $('m-int').style.width = `${Math.max(2, 100 * p.strength / Math.max(1e-9, maxStrength))}%`; $('t-int').textContent = p.n_pairs ? `${p.n_pairs} × ${p.strength}` : 'none';
+    $('planted-note').textContent = `Latent risk factors seen by both layers, by one layer only, and cross-layer products (pairs × strength). Exact by construction.`;
+
+    // takeaway
+    const single = c.cindex.best_single[0];
+    const spread = (k) => Math.max(0.005, c.cindex[k][2] - c.cindex[k][0]);
+    let best = null;
+    for (const m of MODELS) { if (m.key === 'best_single') continue; if (best === null || c.cindex[m.key][0] > c.cindex[best][0]) best = m.key; }
+    const gain = c.cindex[best][0] - single;
+    const noise = Math.max(spread(best), spread('best_single'));
+    const name = MODELS.find(m => m.key === best).label.toLowerCase();
+    const parts = [];
+    if (gain <= 0.005) parts.push(`At n = ${n}, no way of combining the two layers beats the best single layer.`);
+    else if (gain < noise) parts.push(`At n = ${n}, ${name} gains +${fmt(gain, 3)} C-index over the best single layer, but that is within seed-to-seed spread (±${fmt(noise, 3)}): you would not see it in one cohort.`);
+    else parts.push(`At n = ${n}, ${name} gains +${fmt(gain, 3)} C-index over the best single layer, clearly beyond seed-to-seed spread (±${fmt(noise, 3)}).`);
+    if (c.cindex.early_nonlinear && c.cindex.early_linear) {
+      const d = c.cindex.early_nonlinear[0] - c.cindex.early_linear[0];
+      if (d > Math.max(0.01, spread('early_linear'))) parts.push(`The non-linear model beats the linear one by +${fmt(d, 3)}: the planted interaction is real and a linear model cannot use it.`);
+      else if (p.n_pairs) parts.push(`Linear and non-linear models tie: at this cohort size the planted interaction is not learnable.`);
+      else parts.push(`Linear and non-linear models tie: with no interaction planted, a Cox model is all you need.`);
+    }
+    if (oracle && oracle - c.cindex[best][0] > 0.05) parts.push(`The best model is still ${fmt(oracle - c.cindex[best][0], 2)} below the oracle: most of the planted risk is not recovered from ${n} patients.`);
+    $('take-fusion').textContent = parts.join(' ');
+  }
+  $('prov-fusion').innerHTML = grid.meta.provenance_html || '';
+  drawFusion();
+
+  // =============================================================== story 2
+  const rn = res.n;                             // grid of cohort sizes
+  const per = res.per_seed;                     // {n: [values]}
+  const mean = rn.map(n => per[n].reduce((a, b) => a + b, 0) / per[n].length);
+  const q = (arr, p) => { const s = [...arr].sort((a, b) => a - b); const i = (s.length - 1) * p; const lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); };
+  const lo = rn.map(n => q(per[n], 0.025)), hi = rn.map(n => q(per[n], 0.975));
+  const interp = (xs, ys, x) => {
+    if (x <= xs[0]) return ys[0]; if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
+    let i = 0; while (xs[i + 1] < x) i++;
+    const t = (x - xs[i]) / (xs[i + 1] - xs[i]); return ys[i] + t * (ys[i + 1] - ys[i]);
+  };
+  $('s-nres').min = Math.min(100, rn[0]); $('s-nres').max = Math.max(3000, rn[rn.length - 1]);
+
+  function drawRes() {
+    if (!isVisible('chart-res')) return;
+    const n = +$('s-nres').value;
+    $('v-nres').textContent = n;
+    const m = interp(rn, mean, n), l = interp(rn, lo, n), h = interp(rn, hi, n);
+    $('st-mean').textContent = fmt(m, 3);
+    $('st-spread').textContent = `${fmt(l, 3)} – ${fmt(h, 3)}`;
+    const pts = rn.flatMap(nn => per[nn].map(v => ({ x: nn, y: v })));
+    Plotly.react('chart-res', [
+      { type: 'scatter', mode: 'markers', x: pts.map(p => p.x), y: pts.map(p => p.y), marker: { color: '#99AB9F', size: 6, opacity: .6 }, name: 'one seed', hovertemplate: 'n = %{x}<br>S = %{y:.3f}<extra></extra>' },
+      { type: 'scatter', mode: 'lines', x: [...rn, ...[...rn].reverse()], y: [...hi, ...[...lo].reverse()], fill: 'toself', fillcolor: 'rgba(47,67,74,.12)', line: { width: 0 }, hoverinfo: 'skip' },
+      { type: 'scatter', mode: 'lines+markers', x: rn, y: mean, line: { color: '#2F434A', width: 2.5 }, marker: { size: 7, color: '#2F434A' }, name: 'mean', hovertemplate: 'n = %{x}<br>mean S = %{y:.3f}<extra></extra>' },
+      { type: 'scatter', mode: 'markers', x: [n], y: [m], marker: { color: '#BD2B0B', size: 14, symbol: 'diamond' }, name: 'your cohort', hovertemplate: 'your n = %{x}<br>S ≈ %{y:.3f}<extra></extra>' },
+    ], {
+      ...layoutBase, title: { text: res.title || 'Measured synergy vs cohort size', font: { size: 14 }, x: 0 },
+      xaxis: { title: 'cohort size n', gridcolor: '#eee' },
+      yaxis: { title: 'measured synergy (bits)', gridcolor: '#eee', rangemode: 'tozero' },
+      shapes: [
+        { type: 'line', x0: n, x1: n, y0: 0, y1: 1, yref: 'paper', line: { color: '#BD2B0B', dash: 'dot', width: 1 } },
+        ...(Number.isFinite(res.planted) ? [{ type: 'line', x0: 0, x1: 1, xref: 'paper', y0: res.planted, y1: res.planted, line: { color: '#6b6b6b', dash: 'dash', width: 1 } }] : []),
+      ],
+      annotations: Number.isFinite(res.planted) ? [{ x: 1, xref: 'paper', y: res.planted, text: 'planted', showarrow: false, xanchor: 'right', yanchor: 'bottom', font: { size: 11, color: '#6b6b6b' } }] : [],
+    }, cfg);
+    const rel = m > 0 ? (h - l) / m : Infinity;
+    let msg;
+    if (l <= 0.005) msg = `At n = ${n}, the 95% interval reaches zero: a null synergy result here is uninformative. The instrument cannot resolve it.`;
+    else if (rel > 1) msg = `At n = ${n}, synergy is detectable on average (≈ ${fmt(m, 3)} bits) but the interval is wider than the estimate itself. Expect single-cohort readings to disagree.`;
+    else msg = `At n = ${n}, synergy is measurable: ≈ ${fmt(m, 3)} bits with an interval narrower than the estimate. A single cohort gives a usable reading.`;
+    $('take-res').textContent = msg;
+  }
+  $('s-nres').addEventListener('input', drawRes);
+  $('prov-res').innerHTML = res.provenance_html || '';
+  drawRes();
+
+  window.__redraw = () => { drawFusion(); drawRes(); };
+  if (grid.meta.generated) $('foot-prov').textContent += ` Data generated ${grid.meta.generated} from synthegra ${grid.meta.synthegra_commit || ''}.`;
+})();
+</script>
 </body>
 </html>
