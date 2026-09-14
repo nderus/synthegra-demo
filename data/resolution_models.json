@@ -1,0 +1,415 @@
+{
+ "n": [
+  150,
+  300,
+  600,
+  1500,
+  3000
+ ],
+ "per_seed": {
+  "150": {
+   "best_single": [
+    0.5944,
+    0.5585,
+    0.5687,
+    0.6289,
+    0.6577,
+    0.5914,
+    0.5446,
+    0.5962,
+    0.5247,
+    0.534
+   ],
+   "early_linear": [
+    0.6264,
+    0.5076,
+    0.6339,
+    0.6021,
+    0.6186,
+    0.5794,
+    0.5534,
+    0.4955,
+    0.5455,
+    0.4979
+   ],
+   "early_nonlinear": [
+    0.6429,
+    0.5057,
+    0.556,
+    0.6471,
+    0.6616,
+    0.5678,
+    0.5117,
+    0.5322,
+    0.5221,
+    0.4632
+   ],
+   "intermediate": [
+    0.6017,
+    0.4588,
+    0.5446,
+    0.6012,
+    0.6253,
+    0.5341,
+    0.5743,
+    0.5258,
+    0.4858,
+    0.4549
+   ],
+   "oracle": [
+    0.7506,
+    0.6141,
+    0.733,
+    0.7444,
+    0.7796,
+    0.7261,
+    0.7049,
+    0.7153,
+    0.6801,
+    0.6029
+   ],
+   "best_single_nn": [
+    0.5417,
+    0.5507,
+    0.5687,
+    0.6173,
+    0.6275,
+    0.5558,
+    0.5305,
+    0.5962,
+    0.5247,
+    0.534
+   ]
+  },
+  "300": {
+   "best_single": [
+    0.5846,
+    0.5513,
+    0.6459,
+    0.5598,
+    0.5687,
+    0.583,
+    0.6123,
+    0.5397,
+    0.5735,
+    0.5849
+   ],
+   "early_linear": [
+    0.568,
+    0.5523,
+    0.6067,
+    0.556,
+    0.5531,
+    0.5602,
+    0.6362,
+    0.5304,
+    0.5476,
+    0.5636
+   ],
+   "early_nonlinear": [
+    0.6144,
+    0.5548,
+    0.609,
+    0.5947,
+    0.55,
+    0.6019,
+    0.5998,
+    0.5477,
+    0.6129,
+    0.6112
+   ],
+   "intermediate": [
+    0.5647,
+    0.5474,
+    0.6221,
+    0.5457,
+    0.5401,
+    0.5879,
+    0.5622,
+    0.5255,
+    0.5907,
+    0.5971
+   ],
+   "oracle": [
+    0.7289,
+    0.7133,
+    0.7107,
+    0.6743,
+    0.6849,
+    0.7188,
+    0.7364,
+    0.6753,
+    0.7581,
+    0.6892
+   ],
+   "best_single_nn": [
+    0.5665,
+    0.544,
+    0.6306,
+    0.5581,
+    0.5687,
+    0.583,
+    0.6123,
+    0.5265,
+    0.5735,
+    0.5601
+   ]
+  },
+  "600": {
+   "best_single": [
+    0.5248,
+    0.5706,
+    0.5595,
+    0.5917,
+    0.5631,
+    0.5775,
+    0.6221,
+    0.5949,
+    0.6615,
+    0.6806
+   ],
+   "early_linear": [
+    0.5089,
+    0.5439,
+    0.5454,
+    0.6257,
+    0.5839,
+    0.6053,
+    0.6565,
+    0.6012,
+    0.6475,
+    0.681
+   ],
+   "early_nonlinear": [
+    0.5441,
+    0.5591,
+    0.567,
+    0.6202,
+    0.5651,
+    0.5995,
+    0.6636,
+    0.6012,
+    0.6713,
+    0.6882
+   ],
+   "intermediate": [
+    0.5108,
+    0.5726,
+    0.5657,
+    0.5942,
+    0.5577,
+    0.5472,
+    0.6661,
+    0.5783,
+    0.6558,
+    0.6608
+   ],
+   "oracle": [
+    0.7147,
+    0.6653,
+    0.6519,
+    0.7019,
+    0.7042,
+    0.708,
+    0.7369,
+    0.7039,
+    0.7706,
+    0.7481
+   ],
+   "best_single_nn": [
+    0.5081,
+    0.5542,
+    0.523,
+    0.5796,
+    0.5483,
+    0.568,
+    0.6221,
+    0.5689,
+    0.6348,
+    0.6667
+   ]
+  },
+  "1500": {
+   "best_single": [
+    0.6624,
+    0.5974,
+    0.6238,
+    0.5548,
+    0.5868,
+    0.578,
+    0.5737,
+    0.6486,
+    0.6009,
+    0.6248
+   ],
+   "early_linear": [
+    0.6789,
+    0.6382,
+    0.6349,
+    0.5764,
+    0.6182,
+    0.5999,
+    0.5884,
+    0.6498,
+    0.6222,
+    0.6363
+   ],
+   "early_nonlinear": [
+    0.7139,
+    0.6402,
+    0.6449,
+    0.5835,
+    0.6223,
+    0.6038,
+    0.601,
+    0.66,
+    0.6231,
+    0.6209
+   ],
+   "intermediate": [
+    0.6985,
+    0.6091,
+    0.5986,
+    0.5461,
+    0.5797,
+    0.5927,
+    0.5594,
+    0.6499,
+    0.6469,
+    0.5878
+   ],
+   "oracle": [
+    0.7772,
+    0.7034,
+    0.6911,
+    0.6571,
+    0.701,
+    0.6846,
+    0.6897,
+    0.7146,
+    0.7564,
+    0.6866
+   ],
+   "best_single_nn": [
+    0.6312,
+    0.583,
+    0.5869,
+    0.5375,
+    0.561,
+    0.5498,
+    0.5613,
+    0.6133,
+    0.5713,
+    0.5975
+   ]
+  },
+  "3000": {
+   "best_single": [
+    0.5669,
+    0.6011,
+    0.6104,
+    0.6331,
+    0.6567,
+    0.5959,
+    0.5922,
+    0.7147,
+    0.6237,
+    0.6192
+   ],
+   "early_linear": [
+    0.6105,
+    0.619,
+    0.6401,
+    0.6535,
+    0.7366,
+    0.6268,
+    0.6037,
+    0.7246,
+    0.6473,
+    0.625
+   ],
+   "early_nonlinear": [
+    0.6413,
+    0.6209,
+    0.631,
+    0.6453,
+    0.7265,
+    0.6217,
+    0.6067,
+    0.7263,
+    0.6604,
+    0.6277
+   ],
+   "intermediate": [
+    0.664,
+    0.6057,
+    0.6001,
+    0.6385,
+    0.7197,
+    0.6159,
+    0.5907,
+    0.7168,
+    0.6876,
+    0.6265
+   ],
+   "oracle": [
+    0.7395,
+    0.6874,
+    0.67,
+    0.7061,
+    0.7834,
+    0.6916,
+    0.682,
+    0.7611,
+    0.7663,
+    0.6735
+   ],
+   "best_single_nn": [
+    0.5539,
+    0.5659,
+    0.591,
+    0.6084,
+    0.6338,
+    0.5757,
+    0.5561,
+    0.6825,
+    0.5882,
+    0.5963
+   ]
+  }
+ },
+ "winners": {
+  "150": {
+   "intermediate_simple_sum": 2,
+   "intermediate_cross_attention": 7,
+   "intermediate_temp_attention": 1
+  },
+  "300": {
+   "intermediate_simple_sum": 2,
+   "intermediate_gmu": 3,
+   "intermediate_grouped_kronecker": 2,
+   "intermediate_cross_attention": 1,
+   "intermediate_temp_attention": 2
+  },
+  "600": {
+   "intermediate_simple_sum": 3,
+   "intermediate_grouped_kronecker": 3,
+   "intermediate_gmu": 3,
+   "intermediate_cross_attention": 1
+  },
+  "1500": {
+   "intermediate_gmu": 3,
+   "intermediate_cross_attention": 1,
+   "intermediate_simple_sum": 3,
+   "intermediate_grouped_kronecker": 3
+  },
+  "3000": {
+   "intermediate_grouped_kronecker": 7,
+   "intermediate_simple_sum": 1,
+   "intermediate_gmu": 2
+  }
+ },
+ "seeds": 10,
+ "generated": "2026-09-14",
+ "provenance_html": "<p>Same generator and planted structure as the PID sweep (K = 16 latent factors, R/S/U = 0.1/0.3/0.6, two cross-modal interaction pairs at \u03bb = 10, 64 + 64 features), simulated at each cohort size with 10 seeds (Synthegra commit 0f0dadd). 3-fold stratified CV, held-out C-index.</p><p>Early linear = ridge Cox (\u03b1 = 10); early non-linear = boosted survival model (150 trees, depth 2); intermediate = the best of Synthegra's neural intermediate-fusion architectures (simple_sum, temp_attention, cross_attention, gmu, grouped_kronecker) \u00d7 hidden size [16, 64] \u00d7 learning rate [0.001, 0.003], selected per cohort on the validation C-index and reported on the test folds. Best single layer = best of the two layers alone (boosted model or unimodal neural net). Lines: mean gain over the best single layer; bands: 2.5\u201397.5 % across seeds.</p>"
+}

@@ -195,6 +195,8 @@ def build_resolution() -> dict:
     df = df[(df["part"] == "B_resolution") & (df["source"] == "Z_oracle")]
     ns = sorted(int(n) for n in df["N"].unique())
     per = {str(n): [round(float(x), 5) for x in df.loc[df["N"] == n, "S_bits"]] for n in ns}
+    share = {str(n): [round(float(x), 4) for x in df.loc[df["N"] == n, "S_share"]] for n in ns}
+    mi = {str(n): [round(float(x), 4) for x in df.loc[df["N"] == n, "MI"]] for n in ns}
     prov = (
         f"<p>Source: <code>synthegra/results/pid_synergy_nsweep_resolution.csv</code> "
         f"(script <code>experiments/pid_synergy_nsweep.py</code>, commit {_git_commit(SYNTHEGRA)}), "
@@ -205,8 +207,8 @@ def build_resolution() -> dict:
         f"{len(per[str(ns[0])])} seeds per cohort size. Points are single seeds; the band is the 2.5–97.5 % range across seeds. "
         f"Synergy estimates are lower bounds.</p>"
     )
-    return dict(n=ns, per_seed=per, planted=None, title="Measured synergy vs cohort size (same planted structure)",
-                provenance_html=prov)
+    return dict(n=ns, per_seed=per, share=share, mi=mi, planted=None,
+                title="Same planted synergy at every n: only the measurement changes", provenance_html=prov)
 
 
 if __name__ == "__main__":
@@ -214,11 +216,14 @@ if __name__ == "__main__":
     ap.add_argument("--quick", action="store_true", help="tiny grid for smoke testing")
     ap.add_argument("--procs", type=int, default=4)
     ap.add_argument("--grid-only", action="store_true")
+    ap.add_argument("--resolution-only", action="store_true")
     a = ap.parse_args()
     (DEMO / "data").mkdir(exist_ok=True)
     if not a.grid_only:
         json.dump(build_resolution(), open(DEMO / "data" / "resolution.json", "w"), indent=1)
         print("wrote data/resolution.json")
+    if a.resolution_only:
+        sys.exit(0)
     g = build_grid(a.quick, a.procs)
     out = DEMO / "data" / ("grid_quick.json" if a.quick else "grid.json")
     json.dump(g, open(out, "w"), indent=1)
