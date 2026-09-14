@@ -215,7 +215,8 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
       if (window.__redraw) window.__redraw();
     });
   });
-  const [hashTab, hashMetric] = location.hash.slice(1).split(':');
+  const [hashTab, hashMetric, hashParams] = location.hash.slice(1).split(':');   // e.g. #fusion:c:syn=8,sh=0.25,n=1000
+  const HP = Object.fromEntries((hashParams || '').split(',').filter(Boolean).map(kv => kv.split('=')));
   if (hashTab) { const b = document.querySelector(`nav.tabs button[data-tab="${hashTab}"]`); if (b) b.click(); }
 
   const layoutBase = {
@@ -257,7 +258,10 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
   const sl = { synergy: $('s-synergy'), shared: $('s-shared'), n: $('s-n') };
   for (const k of Object.keys(sl)) {
     sl[k].max = ax[k].length - 1;
-    sl[k].value = grid.defaults && grid.defaults[k] !== undefined ? ax[k].indexOf(grid.defaults[k]) : Math.floor(ax[k].length / 2);
+    const hpKey = { synergy: 'syn', shared: 'sh', n: 'n' }[k];
+    const want = HP[hpKey] !== undefined ? Number(HP[hpKey]) : (grid.defaults && grid.defaults[k]);
+    const idx = ax[k].indexOf(want);
+    sl[k].value = idx >= 0 ? idx : Math.floor(ax[k].length / 2);
     sl[k].addEventListener('input', drawFusion);
   }
 
@@ -354,6 +358,8 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
     winners: resm ? resm.winners : {}, seeds: resm ? resm.seeds : 0, provenance: (res.provenance_html || '') + (resm ? resm.provenance_html : ''),
     title: 'Same planted synergy at every n (paper sweep): only the measurement changes' };
   const sel = $('sel-structure');
+  if (HP.n && hashTab === 'resolution') $('s-nres').value = HP.n;
+  if (HP.struct) sel.value = HP.struct;
   if (!STRUCT.tab1) { sel.value = 'paper'; sel.querySelector('option[value="tab1"]').disabled = true; }
   const cur = () => STRUCT[sel.value] || STRUCT.paper;
   sel.addEventListener('change', () => { $('prov-res').innerHTML = cur().provenance; drawRes(); });
