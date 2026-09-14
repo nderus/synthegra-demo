@@ -29,7 +29,7 @@ import os
 import subprocess
 import sys
 import warnings
-from multiprocessing import Pool
+from multiprocessing import get_context
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +39,7 @@ DEMO = HERE.parent
 SYNTHEGRA = DEMO.parent / "synthegra"
 sys.path.insert(0, str(SYNTHEGRA))
 sys.path.insert(0, str(SYNTHEGRA / "experiments"))
+sys.path.insert(0, str(HERE))
 
 warnings.filterwarnings("ignore")
 
@@ -50,15 +51,16 @@ SHARED_LABELS = {0.0: "0 % shared", 0.25: "25 % shared", 0.5: "50 % shared"}
 NS = [150, 400, 1000]
 SEEDS = list(range(1, 9))
 K, P, N_PAIRS, ASYM, NOISE = 8, 40, 2, 0.5, 0.1
-N_FOLDS, RIDGE_ALPHA = 3, 10.0
+N_FOLDS = 3
+NN_STRATEGIES = ["intermediate_simple_sum", "intermediate_gmu", "intermediate_grouped_kronecker"]  # the three that win in the tab-2 sweep
 MODELS = [
     dict(key="best_single", label="Best single layer", color="#9a9a9a"),
     dict(key="late", label="Late fusion (vote)", color="#d9a066"),
     dict(key="early_linear", label="Early fusion, linear", color="#99AB9F"),
     dict(key="early_nonlinear", label="Early fusion, non-linear", color="#2F434A"),
+    dict(key="intermediate", label="Intermediate fusion (best neural)", color="#BD2B0B"),
 ]
 MODEL_KEYS = [m["key"] for m in MODELS]
-GB = dict(n_estimators=150, learning_rate=0.1, max_depth=2, subsample=0.8, random_state=0)
 
 
 def _git_commit(repo: Path) -> str:
@@ -72,14 +74,12 @@ def _git_commit(repo: Path) -> str:
 def _fit_cell(args):
     synergy, shared, n, seed = args
     os.environ.setdefault("OMP_NUM_THREADS", "1")
-    from sklearn.preprocessing import StandardScaler
-    from sksurv.ensemble import GradientBoostingSurvivalAnalysis
-    from sksurv.linear_model import CoxPHSurvivalAnalysis
-    from sksurv.metrics import concordance_index_censored
-    from sksurv.util import Surv
+    import torch
+    torch.set_num_threads(1)
     from doe_runner import generate_cv_splits
     from main_v2 import simulate_data_v2
     from pid_simplex_sweep import _build_v2_config
+    import demolib
 
     cfg, _, _ = _build_v2_config(R_col=shared, asymmetry=ASYM, n_pairs=N_PAIRS,
                                  risk_form="additive", seed=seed, N=n, P=P, K=K,
@@ -88,54 +88,24 @@ def _fit_cell(args):
         return dict(key=(synergy, shared, n, seed), skipped=True)
     res = simulate_data_v2(config=cfg)
     X, time, status = res.X, np.asarray(res.time, float), np.asarray(res.status, int)
-    splits = generate_cv_splits(N=n, n_folds=N_FOLDS, seed=seed, stratify=status)
-
-    def gb():
-        return GradientBoostingSurvivalAnalysis(**GB)
-
     eta = np.asarray(res.eta, float)
-    scores = {k: [] for k in ["mod0", "mod1", "late", "early_linear", "early_nonlinear", "oracle"]}
-    for tr, _va, te in splits:
-        y_tr = Surv.from_arrays(status[tr].astype(bool), time[tr])
-        ev_te, t_te = status[te].astype(bool), time[te]
-        Xs_tr, Xs_te = [], []
-        for m in range(2):
-            sc = StandardScaler().fit(X[m][tr])
-            Xs_tr.append(sc.transform(X[m][tr])); Xs_te.append(sc.transform(X[m][te]))
-        # unimodal + late
-        preds = []
-        for m in range(2):
-            mdl = gb().fit(Xs_tr[m], y_tr)
-            p = mdl.predict(Xs_te[m])
-            scores[f"mod{m}"].append(concordance_index_censored(ev_te, t_te, p)[0])
-            preds.append((p - p.mean()) / (p.std() + 1e-9))
-        scores["late"].append(concordance_index_censored(ev_te, t_te, np.mean(preds, axis=0))[0])
-        # early, non-linear
-        mdl = gb().fit(np.hstack(Xs_tr), y_tr)
-        scores["early_nonlinear"].append(concordance_index_censored(ev_te, t_te, mdl.predict(np.hstack(Xs_te)))[0])
-        # early, linear (ridge Cox); increase the penalty if the solver fails
-        for alpha in (RIDGE_ALPHA, 10 * RIDGE_ALPHA, 100 * RIDGE_ALPHA):
-            try:
-                cox = CoxPHSurvivalAnalysis(alpha=alpha, n_iter=200).fit(np.hstack(Xs_tr), y_tr)
-                scores["early_linear"].append(concordance_index_censored(ev_te, t_te, cox.predict(np.hstack(Xs_te)))[0])
-                break
-            except Exception:
-                continue
-        else:
-            scores["early_linear"].append(float("nan"))
-        # oracle: the true linear predictor
-        scores["oracle"].append(concordance_index_censored(ev_te, t_te, eta[te])[0])
-
-    out = {k: float(np.nanmean(v)) for k, v in scores.items()}
-    out["best_single"] = max(out["mod0"], out["mod1"])
+    splits = generate_cv_splits(N=n, n_folds=N_FOLDS, seed=seed, stratify=status)
+    sk = demolib.score_sksurv(X, time, status, eta, splits)
+    nn_uni = demolib.score_nn_unimodal(X, time, status, splits, seed)
+    nn_int = demolib.score_nn_intermediate(X, time, status, splits, seed, strategies=NN_STRATEGIES)
+    out = demolib.combine(sk, nn_uni, nn_int)
     alloc = cfg.pid.to_latent_allocation(K, 2)
     planted = dict(n_shared=int(alloc["n_shared"]), n_unique_per_mod=int(alloc["n_unique_per_mod"]),
                    n_pairs=N_PAIRS if synergy > 0 else 0, strength=synergy)
-    return dict(key=(synergy, shared, n, seed), cindex=out, planted=planted, event_rate=float(status.mean()))
+    return dict(key=(synergy, shared, n, seed), scores=out, planted=planted, event_rate=float(status.mean()),
+                best_nn=nn_int["strategy"] if nn_int else None)
 
 
 def _summ(vals):
-    v = np.asarray(vals, float)
+    v = np.asarray([x for x in vals if x is not None], float)
+    v = v[np.isfinite(v)]
+    if len(v) == 0:
+        return [None, None, None]
     m, sd = float(v.mean()), float(v.std(ddof=1)) if len(v) > 1 else 0.0
     return [round(m, 4), round(m - 1.96 * sd, 4), round(m + 1.96 * sd, 4)]
 
@@ -145,7 +115,7 @@ def build_grid(quick: bool, procs: int) -> dict:
     jobs = [(s, r, n, seed) for s in syn for r in sh for n in ns for seed in seeds]
     print(f"{len(jobs)} simulations on {procs} processes", flush=True)
     rows = []
-    with Pool(procs) as pool:
+    with get_context("spawn").Pool(procs) as pool:
         for i, r in enumerate(pool.imap_unordered(_fit_cell, jobs), 1):
             rows.append(r)
             if i % 10 == 0 or i == len(jobs):
@@ -157,9 +127,14 @@ def build_grid(quick: bool, procs: int) -> dict:
                 got = [x for x in rows if x["key"][:3] == (s, r, n) and not x.get("skipped")]
                 if not got:
                     continue
-                cind = {k: _summ([g["cindex"][k] for g in got]) for k in MODEL_KEYS + ["oracle"]}
-                cells.append(dict(synergy=s, shared=r, n=n, seeds=len(got), cindex=cind, planted=got[0]["planted"],
-                                  event_rate=round(float(np.mean([g["event_rate"] for g in got])), 3)))
+                cind = {k: _summ([g["scores"][k]["c"] for g in got]) for k in MODEL_KEYS + ["oracle"]}
+                ibs = {k: _summ([g["scores"][k]["ibs"] for g in got]) for k in MODEL_KEYS}
+                wins = {}
+                for g in got:
+                    if g["best_nn"]:
+                        wins[g["best_nn"]] = wins.get(g["best_nn"], 0) + 1
+                cells.append(dict(synergy=s, shared=r, n=n, seeds=len(got), cindex=cind, ibs=ibs, planted=got[0]["planted"],
+                                  winners=wins, event_rate=round(float(np.mean([g["event_rate"] for g in got])), 3)))
     commit = _git_commit(SYNTHEGRA)
     prov = (
         f"<p>Generator: Synthegra <code>main_v2.simulate_data_v2</code>, mode <code>pid_controlled</code> "
@@ -168,12 +143,15 @@ def build_grid(quick: bool, procs: int) -> dict:
         f"Synergy = strength of {N_PAIRS} planted cross-modal interactions between unique latent factors "
         f"(<code>InteractionConfig.cross_modal_unique_pairs</code>); shared signal = fraction of latent columns "
         f"loaded by both modalities (<code>PIDConfig.redundancy</code>).</p>"
-        f"<p>Models (scikit-survival), {N_FOLDS}-fold stratified CV, held-out C-index: best single layer and "
-        f"early non-linear fusion = gradient-boosted survival models (Cox partial likelihood, {GB['n_estimators']} trees, "
-        f"depth {GB['max_depth']}); late fusion = the per-layer boosted models with standardised risk scores averaged; "
-        f"early linear fusion = ridge-penalised Cox model (α = {RIDGE_ALPHA:g}) on the concatenated features. "
-        f"Oracle = C-index of the true linear predictor used to generate the event times. "
-        f"Bars: mean over {len(seeds)} seeds; whiskers: mean ± 1.96 SD across seeds (seed-to-seed spread, not a standard error).</p>"
+        f"<p>Models, {N_FOLDS}-fold stratified CV on held-out folds: best single layer = best of the two layers alone "
+        f"(boosted survival model or unimodal neural net); late fusion = per-layer boosted models, risk scores averaged for the "
+        f"C-index and survival curves averaged for the IBS; early linear = ridge-penalised Cox on the concatenated features; "
+        f"early non-linear = gradient-boosted survival model (150 trees, depth 2) on the concatenated features; "
+        f"intermediate = the best of three Synthegra neural intermediate-fusion architectures (simple sum, GMU, "
+        f"grouped Kronecker) × hidden size 16 / 64, selected per cohort on the validation C-index and "
+        f"reported on the test folds. Oracle = C-index of the true linear predictor. "
+        f"IBS = integrated Brier score over 100 time points across the test fold's follow-up with Kaplan-Meier censoring weights "
+        f"(pycox EvalSurv), lower is better. Bars: mean over {len(seeds)} seeds; whiskers: mean ± 1.96 SD across seeds.</p>"
         f"<p>Why no redundancy / uniqueness / synergy read-out: the generator's quick built-in PID estimate reports "
         f"substantial synergy on cohorts with no planted interaction, so it is not shown. The planted structure is exact by construction.</p>"
     )

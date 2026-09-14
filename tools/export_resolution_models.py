@@ -33,18 +33,15 @@ DEMO = HERE.parent
 SYNTHEGRA = DEMO.parent / "synthegra"
 sys.path.insert(0, str(SYNTHEGRA))
 sys.path.insert(0, str(SYNTHEGRA / "experiments"))
+sys.path.insert(0, str(HERE))
 warnings.filterwarnings("ignore")
 
 NS = [150, 300, 600, 1500, 3000]
 SEEDS = list(range(10))
 LAM, K, P = 10.0, 16, [64, 64]
-N_FOLDS, RIDGE_ALPHA = 3, 10.0
-GB = dict(n_estimators=150, learning_rate=0.1, max_depth=2, subsample=0.8, random_state=0)
-STRATEGIES = ["intermediate_simple_sum", "intermediate_temp_attention", "intermediate_cross_attention",
-              "intermediate_gmu", "intermediate_grouped_kronecker"]
-HIDDEN = [16, 64]
-LRS = [1e-3, 3e-3]
-NN = dict(n_epochs=200, patience=40, batch_size=64, l1_lambda=1e-5)
+N_FOLDS = 3
+HIDDEN = (16, 64)
+LRS = (1e-3, 3e-3)
 
 
 def _git_commit(repo: Path) -> str:
@@ -67,65 +64,17 @@ def _cell(args):
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     import torch
     torch.set_num_threads(1)
-    from sklearn.preprocessing import StandardScaler
-    from sksurv.ensemble import GradientBoostingSurvivalAnalysis
-    from sksurv.linear_model import CoxPHSurvivalAnalysis
-    from sksurv.metrics import concordance_index_censored
-    from sksurv.util import Surv
     from doe_runner import generate_cv_splits
-    from utils_nn import fit_integrative_model_nn, fit_unimodal_models_nn
-
+    import demolib
     res = _sim(n, seed)
     X, time, status = res.X, np.asarray(res.time, float), np.asarray(res.status, int)
     eta = np.asarray(res.eta, float)
     splits = generate_cv_splits(N=n, n_folds=N_FOLDS, seed=seed, stratify=status)
-
-    sc = {k: [] for k in ["gb0", "gb1", "early_linear", "early_nonlinear", "oracle"]}
-    for tr, _va, te in splits:
-        y_tr = Surv.from_arrays(status[tr].astype(bool), time[tr])
-        ev, tt = status[te].astype(bool), time[te]
-        Xs_tr, Xs_te = [], []
-        for m in range(2):
-            s = StandardScaler().fit(X[m][tr]); Xs_tr.append(s.transform(X[m][tr])); Xs_te.append(s.transform(X[m][te]))
-            mdl = GradientBoostingSurvivalAnalysis(**GB).fit(Xs_tr[m], y_tr)
-            sc[f"gb{m}"].append(concordance_index_censored(ev, tt, mdl.predict(Xs_te[m]))[0])
-        mdl = GradientBoostingSurvivalAnalysis(**GB).fit(np.hstack(Xs_tr), y_tr)
-        sc["early_nonlinear"].append(concordance_index_censored(ev, tt, mdl.predict(np.hstack(Xs_te)))[0])
-        for alpha in (RIDGE_ALPHA, 10 * RIDGE_ALPHA, 100 * RIDGE_ALPHA):
-            try:
-                cox = CoxPHSurvivalAnalysis(alpha=alpha, n_iter=200).fit(np.hstack(Xs_tr), y_tr)
-                sc["early_linear"].append(concordance_index_censored(ev, tt, cox.predict(np.hstack(Xs_te)))[0]); break
-            except Exception:
-                continue
-        else:
-            sc["early_linear"].append(float("nan"))
-        sc["oracle"].append(concordance_index_censored(ev, tt, eta[te])[0])
-    out = {k: float(np.nanmean(v)) for k, v in sc.items()}
-
-    # unimodal neural nets (default HPs)
-    uni, _ = fit_unimodal_models_nn(X=X, time=time, status=status, splits=splits, seed=seed,
-                                    hidden_dim=16, lr=1e-3, **NN)
-    nn_uni = [float(uni[f"Modality_{m}"]["avg_c_index"]) for m in range(2)]
-    out["best_single"] = max(out["gb0"], out["gb1"], *nn_uni)
-    out["best_single_nn"] = max(nn_uni)
-
-    # intermediate fusion: HP search selected on validation C-index
-    best = None
-    trials = []
-    for strat in STRATEGIES:
-        for hd in HIDDEN:
-            for lr in LRS:
-                try:
-                    m, _ = fit_integrative_model_nn(X=X, time=time, status=status, splits=splits, seed=seed,
-                                                    integration_strategy=strat, hidden_dim=hd, lr=lr, **NN)
-                    val, test = float(m["avg_val_c_index"]), float(m["avg_c_index"])
-                except Exception:
-                    val, test = float("nan"), float("nan")
-                trials.append(dict(strategy=strat, hidden=hd, lr=lr, val=val, test=test))
-                if np.isfinite(val) and (best is None or val > best["val"]):
-                    best = trials[-1]
-    out["intermediate"] = best["test"] if best else float("nan")
-    return dict(n=n, seed=seed, cindex=out, best=best, event_rate=float(status.mean()))
+    sk = demolib.score_sksurv(X, time, status, eta, splits)
+    nn_uni = demolib.score_nn_unimodal(X, time, status, splits, seed)
+    nn_int = demolib.score_nn_intermediate(X, time, status, splits, seed, hidden=HIDDEN, lrs=LRS)
+    out = demolib.combine(sk, nn_uni, nn_int)
+    return dict(n=n, seed=seed, scores=out, best=nn_int, event_rate=float(status.mean()))
 
 
 def main(quick: bool, procs: int):
@@ -136,11 +85,15 @@ def main(quick: bool, procs: int):
     with get_context("spawn").Pool(procs) as pool:
         for i, r in enumerate(pool.imap_unordered(_cell, jobs), 1):
             rows.append(r)
+            sc = r["scores"]
             print(f"  {i}/{len(jobs)}  n={r['n']} seed={r['seed']} best={r['best']['strategy'] if r['best'] else None} "
-                  f"single={r['cindex']['best_single']:.3f} lin={r['cindex']['early_linear']:.3f} "
-                  f"nonlin={r['cindex']['early_nonlinear']:.3f} inter={r['cindex']['intermediate']:.3f}", flush=True)
-    keys = ["best_single", "early_linear", "early_nonlinear", "intermediate", "oracle", "best_single_nn"]
-    per_seed = {str(n): {k: [round(r["cindex"][k], 4) for r in rows if r["n"] == n] for k in keys} for n in ns}
+                  f"C: single={sc['best_single']['c']:.3f} lin={sc['early_linear']['c']:.3f} "
+                  f"nonlin={sc['early_nonlinear']['c']:.3f} inter={sc['intermediate']['c']:.3f} | "
+                  f"IBS: single={sc['best_single']['ibs']:.3f} nonlin={sc['early_nonlinear']['ibs']:.3f}", flush=True)
+    keys = ["best_single", "late", "early_linear", "early_nonlinear", "intermediate", "oracle"]
+    rnd = lambda x: (round(float(x), 4) if x is not None and np.isfinite(x) else None)
+    per_seed = {str(n): {k: [rnd(r["scores"][k]["c"]) for r in rows if r["n"] == n] for k in keys} for n in ns}
+    per_seed_ibs = {str(n): {k: [rnd(r["scores"][k]["ibs"]) for r in rows if r["n"] == n] for k in keys if k != "oracle"} for n in ns}
     winners = {str(n): {} for n in ns}
     for r in rows:
         if r["best"]:
@@ -149,14 +102,16 @@ def main(quick: bool, procs: int):
         f"<p>Same generator and planted structure as the PID sweep (K = {K} latent factors, R/S/U = 0.1/0.3/0.6, "
         f"two cross-modal interaction pairs at λ = {LAM:g}, {P[0]} + {P[1]} features), simulated at each cohort size with "
         f"{len(seeds)} seeds (Synthegra commit {_git_commit(SYNTHEGRA)}). {N_FOLDS}-fold stratified CV, held-out C-index.</p>"
-        f"<p>Early linear = ridge Cox (α = {RIDGE_ALPHA:g}); early non-linear = boosted survival model "
-        f"({GB['n_estimators']} trees, depth {GB['max_depth']}); intermediate = the best of Synthegra's neural "
-        f"intermediate-fusion architectures ({', '.join(s.replace('intermediate_', '') for s in STRATEGIES)}) × hidden size "
-        f"{HIDDEN} × learning rate {LRS}, selected per cohort on the validation C-index and reported on the test folds. "
+        f"<p>Early linear = ridge Cox; early non-linear = boosted survival model (150 trees, depth 2); "
+        f"intermediate = the best of Synthegra's neural intermediate-fusion architectures (simple sum, temporal attention, "
+        f"cross-attention, GMU, grouped Kronecker) × hidden size {list(HIDDEN)} × learning rate {list(LRS)}, "
+        f"selected per cohort on the validation C-index and reported on the test folds. "
         f"Best single layer = best of the two layers alone (boosted model or unimodal neural net). "
+        f"IBS = integrated Brier score over 100 time points across the test fold's follow-up with Kaplan-Meier censoring "
+        f"weights (pycox EvalSurv), lower is better; for IBS the gain is best-single minus model, so positive is still better. "
         f"Lines: mean gain over the best single layer; bands: 2.5–97.5 % across seeds.</p>"
     )
-    json.dump(dict(n=ns, per_seed=per_seed, winners=winners, seeds=len(seeds),
+    json.dump(dict(n=ns, per_seed=per_seed, per_seed_ibs=per_seed_ibs, winners=winners, seeds=len(seeds),
                    generated=dt.date.today().isoformat(), provenance_html=prov),
               open(DEMO / "data" / ("resolution_models_quick.json" if quick else "resolution_models.json"), "w"), indent=1)
     print("wrote data/resolution_models" + ("_quick" if quick else "") + ".json")

@@ -57,6 +57,9 @@
   footer a{color:var(--slate)}
   .links a{display:inline-block;margin:4px 10px 4px 0;padding:8px 12px;border:1px solid var(--slate);border-radius:8px;text-decoration:none;color:var(--slate);font-weight:600}
   .warn{color:var(--rust);font-size:.9rem}
+  .switch{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;margin:0 0 10px}
+  .switch button{border:0;background:#fff;padding:7px 12px;font-size:.88rem;cursor:pointer;color:var(--slate)}
+  .switch button[aria-pressed="true"]{background:var(--rust);color:#fff}
   img.fig{max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
   .loading{color:var(--grey);padding:20px}
 </style>
@@ -77,7 +80,7 @@
   <!-- ---------------------------------------------------------------- story 1 -->
   <section class="story" id="fusion" data-active="true">
     <h2>When does fusion help?</h2>
-    <p class="lead">Move the sliders to change how the two data layers relate to survival. Every bar is a simulated cohort with known structure, scored on held-out patients. Bars show the mean over seeds, whiskers the seed-to-seed spread, the dashed line the oracle that knows the true risk.</p>
+    <p class="lead">Move the sliders to change how the two data layers relate to survival. Every bar is a simulated cohort with known structure, scored on held-out patients. Bars show the mean over seeds, whiskers the seed-to-seed spread, the dashed line the oracle that knows the true risk. Switch between discrimination (C-index) and calibration-plus-discrimination (integrated Brier score).</p>
     <div class="grid">
       <div class="panel">
         <h3>Planted structure</h3>
@@ -106,6 +109,7 @@
       </div>
       <div>
         <div class="panel">
+          <div class="switch" role="group" aria-label="metric"><button data-metric="c" aria-pressed="true">C-index (higher is better)</button><button data-metric="ibs" aria-pressed="false">IBS (lower is better)</button></div>
           <div id="chart-fusion" class="chart"></div>
         </div>
         <div class="takeaway" id="take-fusion">…</div>
@@ -118,7 +122,9 @@
         <dt>Late fusion (vote)</dt><dd>Each specialist votes: one model per layer, average the risk scores. Cannot see interactions between layers.</dd>
         <dt>Early fusion, linear</dt><dd>Pile every report on one desk and fit a Cox model: every feature adds its own risk, nothing multiplies.</dd>
         <dt>Early fusion, non-linear</dt><dd>Same desk, but a model (boosted survival trees) that can learn "this mutation matters only when that pathway is high".</dd>
-        <dt>Oracle</dt><dd>The C-index you would get if you knew the true risk of every simulated patient. The ceiling for this cohort.</dd>
+        <dt>Intermediate fusion (best neural)</dt><dd>Each layer gets its own neural encoder, the encodings are fused, one survival head on top. Synthegra has five fusion architectures; for every cohort the best one by validation C-index is shown.</dd>
+        <dt>Oracle</dt><dd>The C-index you would get if you knew the true risk of every simulated patient. The ceiling for this cohort. Not defined for the IBS.</dd>
+        <dt>IBS</dt><dd>Integrated Brier score: the average squared error of the predicted survival probability over follow-up, with censoring weights. It rewards both ranking and calibration. 0 is perfect; predicting the population curve for everyone gives roughly 0.15–0.25 depending on the event rate.</dd>
         <dt>Shared · unique · interaction</dt><dd>Two witnesses to the same event. Shared: both tell the same story. Unique: only one saw it. Interaction: the clue appears only when the two stories are combined (synergy).</dd>
       </dl>
     </div></details>
@@ -144,11 +150,11 @@
         </div>
         <h3>Read-out 2 · prediction</h3>
         <div class="stat" id="st-models"></div>
-        <small style="color:var(--grey)">Gain in held-out C-index over the best single layer, mean and seed range.</small>
+        <small style="color:var(--grey)" id="st-models-note">Gain over the best single layer in the selected metric (positive = better), mean and seed range.</small>
       </div>
       <div>
         <div class="panel"><div id="chart-res" class="chart"></div></div>
-        <div class="panel" id="panel-resm" style="margin-top:12px"><div id="chart-resm" class="chart"></div><small id="resm-winners" style="color:var(--grey)"></small></div>
+        <div class="panel" id="panel-resm" style="margin-top:12px"><div class="switch" role="group" aria-label="metric"><button data-metric="c" aria-pressed="true">C-index gain</button><button data-metric="ibs" aria-pressed="false">IBS gain</button></div><div id="chart-resm" class="chart"></div><small id="resm-winners" style="color:var(--grey)"></small></div>
         <div class="takeaway" id="take-res">…</div>
       </div>
     </div>
@@ -199,11 +205,12 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
     btn.addEventListener('click', () => {
       document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b === btn));
       document.querySelectorAll('section.story').forEach(s => s.dataset.active = (s.id === btn.dataset.tab));
-      history.replaceState(null, '', '#' + btn.dataset.tab);
+      history.replaceState(null, '', '#' + btn.dataset.tab + (window.__metric && window.__metric() === 'ibs' ? ':ibs' : ''));
       if (window.__redraw) window.__redraw();
     });
   });
-  if (location.hash) { const b = document.querySelector(`nav.tabs button[data-tab="${location.hash.slice(1)}"]`); if (b) b.click(); }
+  const [hashTab, hashMetric] = location.hash.slice(1).split(':');
+  if (hashTab) { const b = document.querySelector(`nav.tabs button[data-tab="${hashTab}"]`); if (b) b.click(); }
 
   const layoutBase = {
     margin: { l: 56, r: 16, t: 28, b: 56 }, paper_bgcolor: '#fff', plot_bgcolor: '#fff',
@@ -223,6 +230,18 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
       '<p class="warn">Could not load data/grid.json or data/resolution.json. If you opened this file directly, serve the folder over HTTP (e.g. <code>python3 -m http.server</code>).</p>');
     return;
   }
+
+  // ---- metric switch (shared state)
+  let metric = hashMetric === 'ibs' ? 'ibs' : 'c';
+  document.querySelectorAll('.switch button').forEach(x => x.setAttribute('aria-pressed', x.dataset.metric === metric));
+  document.querySelectorAll('.switch button').forEach(b => b.addEventListener('click', () => {
+    metric = b.dataset.metric;
+    history.replaceState(null, '', '#' + (document.querySelector('section.story[data-active="true"]') || {}).id + (metric === 'ibs' ? ':ibs' : ''));
+    document.querySelectorAll('.switch button').forEach(x => x.setAttribute('aria-pressed', x.dataset.metric === metric));
+    if (window.__redraw) window.__redraw();
+  }));
+  window.__metric = () => metric;
+  const M_LABEL = { c: 'C-index', ibs: 'IBS' };
 
   // =============================================================== story 1
   const ax = grid.axes;                       // {synergy:[...], shared:[...], n:[...]}
@@ -252,27 +271,29 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
     const c = cells.get(key(s, r, n));
     if (!c) { $('take-fusion').textContent = 'No simulation for this combination.'; return; }
 
-    const x = MODELS.map(m => m.label);
-    const y = MODELS.map(m => c.cindex[m.key][0]);
-    const lo = MODELS.map(m => c.cindex[m.key][0] - c.cindex[m.key][1]);
-    const hi = MODELS.map(m => c.cindex[m.key][2] - c.cindex[m.key][0]);
-    const oracle = c.cindex.oracle ? c.cindex.oracle[0] : null;
-    const ymin = Math.max(0.4, Math.min(...MODELS.map(m => c.cindex[m.key][1])) - 0.03);
-    const ymax = Math.min(1.0, Math.max(oracle || 0, ...MODELS.map(m => c.cindex[m.key][2])) + 0.05);
+    const tab = metric === 'ibs' ? c.ibs : c.cindex;
+    const models = MODELS.filter(m => tab[m.key] && tab[m.key][0] !== null);
+    const x = models.map(m => m.label.replace('Intermediate fusion (best neural)', 'Intermediate<br>(best neural)').replace(', ', ',<br>').replace('Best single layer', 'Best single<br>layer').replace('Late fusion (vote)', 'Late fusion<br>(vote)'));
+    const y = models.map(m => tab[m.key][0]);
+    const lo = models.map(m => tab[m.key][0] - tab[m.key][1]);
+    const hi = models.map(m => tab[m.key][2] - tab[m.key][0]);
+    const oracle = metric === 'c' && c.cindex.oracle ? c.cindex.oracle[0] : null;
+    const ymin = metric === 'c' ? Math.max(0.4, Math.min(...models.map(m => tab[m.key][1])) - 0.03) : Math.max(0, Math.min(...models.map(m => tab[m.key][1])) - 0.01);
+    const ymax = metric === 'c' ? Math.min(1.0, Math.max(oracle || 0, ...models.map(m => tab[m.key][2])) + 0.05) : Math.max(...models.map(m => tab[m.key][2])) + 0.02;
     Plotly.react('chart-fusion', [{
-      type: 'bar', x, y, marker: { color: MODELS.map(m => m.color) },
+      type: 'bar', x, y, marker: { color: models.map(m => m.color) },
       error_y: { type: 'data', array: hi, arrayminus: lo, visible: true, color: '#1e1e1e', thickness: 1.2, width: 6 },
-      text: y.map(v => fmt(v)), textposition: 'outside', cliponaxis: false,
-      hovertemplate: '%{x}<br>C-index %{y:.3f}<extra></extra>',
+      text: y.map(v => fmt(v, metric === 'c' ? 2 : 3)), textposition: 'outside', cliponaxis: false,
+      hovertemplate: '%{x}<br>' + M_LABEL[metric] + ' %{y:.3f}<extra></extra>',
     }], {
-      ...layoutBase, title: { text: `Held-out C-index · ${c.seeds} seeds · event rate ${Math.round(100 * c.event_rate)} %`, font: { size: 14 }, x: 0 },
-      yaxis: { range: [ymin, ymax], title: 'C-index', gridcolor: '#eee', zeroline: false },
-      xaxis: { tickfont: { size: 12 } },
+      ...layoutBase, title: { text: `Held-out ${M_LABEL[metric]} · ${c.seeds} seeds · event rate ${Math.round(100 * c.event_rate)} %` + (metric === 'ibs' ? ' · lower is better' : ''), font: { size: 14 }, x: 0 },
+      yaxis: { range: [ymin, ymax], title: M_LABEL[metric], gridcolor: '#eee', zeroline: false },
+      xaxis: { tickfont: { size: 12 }, tickangle: 0 },
       shapes: [
-        { type: 'line', x0: -0.5, x1: MODELS.length - 0.5, y0: y[0], y1: y[0], line: { color: '#9a9a9a', dash: 'dot', width: 1 } },
-        ...(oracle ? [{ type: 'line', x0: -0.5, x1: MODELS.length - 0.5, y0: oracle, y1: oracle, line: { color: '#BD2B0B', dash: 'dash', width: 1.5 } }] : []),
+        { type: 'line', x0: -0.5, x1: models.length - 0.5, y0: y[0], y1: y[0], line: { color: '#9a9a9a', dash: 'dot', width: 1 } },
+        ...(oracle ? [{ type: 'line', x0: -0.5, x1: models.length - 0.5, y0: oracle, y1: oracle, line: { color: '#BD2B0B', dash: 'dash', width: 1.5 } }] : []),
       ],
-      annotations: oracle ? [{ x: MODELS.length - 0.5, y: oracle, text: `oracle ${fmt(oracle)}`, showarrow: false, xanchor: 'right', yanchor: 'bottom', font: { size: 11, color: '#BD2B0B' } }] : [],
+      annotations: oracle ? [{ x: models.length - 0.5, y: oracle, text: `oracle ${fmt(oracle)}`, showarrow: false, xanchor: 'right', yanchor: 'bottom', font: { size: 11, color: '#BD2B0B' } }] : [],
     }, cfg);
 
     // planted structure readout
@@ -282,25 +303,33 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
     $('m-int').style.width = `${Math.max(2, 100 * p.strength / Math.max(1e-9, maxStrength))}%`; $('t-int').textContent = p.n_pairs ? `${p.n_pairs} × ${p.strength}` : 'none';
     $('planted-note').textContent = `Latent risk factors seen by both layers, by one layer only, and cross-layer products (pairs × strength). Exact by construction.`;
 
-    // takeaway
-    const single = c.cindex.best_single[0];
-    const spread = (k) => Math.max(0.005, c.cindex[k][2] - c.cindex[k][0]);
+    // takeaway (sign convention: gain > 0 is better for both metrics)
+    const sgn = metric === 'c' ? 1 : -1;
+    const val = (k) => tab[k] ? tab[k][0] : null;
+    const spread = (k) => Math.max(0.005, Math.abs(tab[k][2] - tab[k][0]));
+    const single = val('best_single');
     let best = null;
-    for (const m of MODELS) { if (m.key === 'best_single') continue; if (best === null || c.cindex[m.key][0] > c.cindex[best][0]) best = m.key; }
-    const gain = c.cindex[best][0] - single;
+    for (const m of models) { if (m.key === 'best_single') continue; if (val(m.key) === null) continue; if (best === null || sgn * val(m.key) > sgn * val(best)) best = m.key; }
+    const gain = sgn * (val(best) - single);
     const noise = Math.max(spread(best), spread('best_single'));
-    const name = MODELS.find(m => m.key === best).label.toLowerCase();
+    const name = models.find(m => m.key === best).label.toLowerCase();
     const parts = [];
-    if (gain <= 0.005) parts.push(`At n = ${n}, no way of combining the two layers beats the best single layer.`);
-    else if (gain < noise) parts.push(`At n = ${n}, ${name} gains +${fmt(gain, 3)} C-index over the best single layer, but that is within seed-to-seed spread (±${fmt(noise, 3)}): you would not see it in one cohort.`);
-    else parts.push(`At n = ${n}, ${name} gains +${fmt(gain, 3)} C-index over the best single layer, clearly beyond seed-to-seed spread (±${fmt(noise, 3)}).`);
-    if (c.cindex.early_nonlinear && c.cindex.early_linear) {
-      const d = c.cindex.early_nonlinear[0] - c.cindex.early_linear[0];
-      if (d > Math.max(0.01, spread('early_linear'))) parts.push(`The non-linear model beats the linear one by +${fmt(d, 3)}: the planted interaction is real and a linear model cannot use it.`);
+    const unit = M_LABEL[metric];
+    if (gain <= 0.003) parts.push(`At n = ${n}, no way of combining the two layers beats the best single layer on ${unit}.`);
+    else if (gain < noise) parts.push(`At n = ${n}, ${name} improves ${unit} by ${fmt(gain, 3)} over the best single layer, but that is within seed-to-seed spread (±${fmt(noise, 3)}): you would not see it in one cohort.`);
+    else parts.push(`At n = ${n}, ${name} improves ${unit} by ${fmt(gain, 3)} over the best single layer, clearly beyond seed-to-seed spread (±${fmt(noise, 3)}).`);
+    if (val('early_nonlinear') !== null && val('early_linear') !== null) {
+      const d = sgn * (val('early_nonlinear') - val('early_linear'));
+      if (d > Math.max(0.01, spread('early_linear'))) parts.push(`The non-linear model beats the linear one by ${fmt(d, 3)}: the planted interaction is real and a linear model cannot use it.`);
       else if (p.n_pairs) parts.push(`Linear and non-linear models tie: at this cohort size the planted interaction is not learnable.`);
       else parts.push(`Linear and non-linear models tie: with no interaction planted, a Cox model is all you need.`);
     }
-    if (oracle && oracle - c.cindex[best][0] > 0.05) parts.push(`The best model is still ${fmt(oracle - c.cindex[best][0], 2)} below the oracle: most of the planted risk is not recovered from ${n} patients.`);
+    if (val('intermediate') !== null && val('early_nonlinear') !== null) {
+      const d = sgn * (val('intermediate') - val('early_nonlinear'));
+      if (d > Math.max(0.01, spread('early_nonlinear'))) parts.push(`The neural intermediate fusion is ahead of boosted early fusion by ${fmt(d, 3)}.`);
+      else if (d < -Math.max(0.01, spread('intermediate'))) parts.push(`The neural intermediate fusion trails boosted early fusion by ${fmt(-d, 3)}: with ${n} patients the extra encoders cost more than they add.`);
+    }
+    if (oracle && oracle - val(best) > 0.05) parts.push(`The best model is still ${fmt(oracle - val(best), 2)} below the oracle: most of the planted risk is not recovered from ${n} patients.`);
     $('take-fusion').textContent = parts.join(' ');
   }
   $('prov-fusion').innerHTML = grid.meta.provenance_html || '';
@@ -326,17 +355,22 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
 
   // model read-out: gains over best single layer, per seed
   const MODS = [['early_linear', 'Early fusion, linear', '#99AB9F'], ['early_nonlinear', 'Early fusion, non-linear', '#2F434A'], ['intermediate', 'Intermediate fusion (best neural)', '#BD2B0B']];
-  let gains = null;
-  if (resm) {
-    gains = {};
+  function computeGains(which) {
+    if (!resm) return null;
+    const src = which === 'ibs' ? resm.per_seed_ibs : resm.per_seed;
+    if (!src) return null;
+    const sgn = which === 'ibs' ? -1 : 1;
+    const out = {};
     for (const [k] of MODS) {
-      gains[k] = { mean: [], lo: [], hi: [] };
+      out[k] = { mean: [], lo: [], hi: [] };
       for (const n of resm.n) {
-        const g = resm.per_seed[n][k].map((v, i) => v - resm.per_seed[n].best_single[i]).filter(Number.isFinite);
-        gains[k].mean.push(meanOf(g)); gains[k].lo.push(q(g, 0.025)); gains[k].hi.push(q(g, 0.975));
+        const g = src[n][k].map((v, i) => (v === null || src[n].best_single[i] === null) ? NaN : sgn * (v - src[n].best_single[i])).filter(Number.isFinite);
+        out[k].mean.push(meanOf(g)); out[k].lo.push(q(g, 0.025)); out[k].hi.push(q(g, 0.975));
       }
     }
+    return out;
   }
+  const gainsBy = { c: computeGains('c'), ibs: computeGains('ibs') };
 
   function drawRes() {
     if (!isVisible('chart-res')) return;
@@ -367,6 +401,7 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
     else if ((h - l) > m) parts.push(`Information read-out at n = ${n}: synergy is detectable on average (≈ ${fmt(m, 3)} bits) but the seed range is wider than the estimate. Single-cohort readings will disagree.`);
     else parts.push(`Information read-out at n = ${n}: ≈ ${fmt(m, 3)} bits with a range narrower than the estimate. A single cohort gives a usable reading.`);
 
+    const gains = gainsBy[metric] || gainsBy.c;
     if (gains) {
       const rows = MODS.map(([k, label, col]) => {
         const g = interp(resm.n, gains[k].mean, n), gl = interp(resm.n, gains[k].lo, n), gh = interp(resm.n, gains[k].hi, n);
@@ -381,9 +416,9 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
       tr.push({ type: 'scatter', mode: 'markers', x: rows.map(() => n), y: rows.map(r => r.g), marker: { color: rows.map(r => r.col), size: 12, symbol: 'diamond', line: { color: '#fff', width: 1 } }, name: 'your cohort', showlegend: false, hoverinfo: 'skip' });
       Plotly.react('chart-resm', tr, {
         ...layoutBase, margin: { l: 56, r: 64, t: 28, b: 110 }, showlegend: true, legend: { orientation: 'h', y: -0.32, font: { size: 11 } },
-        title: { text: 'Read-out 2 · gain of fusion over the best single layer, same planted structure', font: { size: 14 }, x: 0 },
+        title: { text: `Read-out 2 · ${M_LABEL[metric]} gain of fusion over the best single layer, same planted structure`, font: { size: 14 }, x: 0 },
         xaxis: { title: 'cohort size n', gridcolor: '#eee', range: [0, xmax] },
-        yaxis: { title: 'Δ C-index vs best single layer', gridcolor: '#eee', zeroline: true, zerolinecolor: '#9a9a9a' },
+        yaxis: { title: metric === 'ibs' ? 'IBS gain vs single layer' : 'Δ C-index vs single layer', gridcolor: '#eee', zeroline: true, zerolinecolor: '#9a9a9a' },
         shapes: [{ type: 'line', x0: n, x1: n, y0: 0, y1: 1, yref: 'paper', line: { color: '#BD2B0B', dash: 'dot', width: 1 } }],
       }, cfg);
       const nl = rows.find(r => r.k === 'early_nonlinear'), li = rows.find(r => r.k === 'early_linear'), im = rows.find(r => r.k === 'intermediate');
@@ -391,13 +426,13 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
       const bestR = (im && nl) ? (im.g > nl.g ? im : nl) : (im || nl);
       const dInt = nl && li ? nl.g - li.g : 0;
       if (usable(nl) || usable(im)) {
-        let msg = `Prediction read-out: ${bestR.label.toLowerCase()} gains +${fmt(bestR.g, 3)} C-index over the best single layer (seed range ${fmt(bestR.gl, 3)} to ${fmt(bestR.gh, 3)}); the linear control gains ${li.g >= 0 ? '+' : ''}${fmt(li.g, 3)}.`;
+        let msg = `Prediction read-out (${M_LABEL[metric]}): ${bestR.label.toLowerCase()} gains +${fmt(bestR.g, 3)} over the best single layer (seed range ${fmt(bestR.gl, 3)} to ${fmt(bestR.gh, 3)}); the linear control gains ${li.g >= 0 ? '+' : ''}${fmt(li.g, 3)}.`;
         msg += dInt > 0.01
           ? ` The non-linear model is ahead of the linear one by +${fmt(dInt, 3)}: part of the gain comes from the interaction itself.`
           : ` The linear control gains about as much, so what is gained here is the second layer's unique information, not the interaction. The planted synergy is still not usable at this size.`;
         parts.push(msg);
       } else {
-        parts.push(`Prediction read-out: no fusion model gains reliably over the best single layer at n = ${n} (non-linear ${nl.g >= 0 ? '+' : ''}${fmt(nl.g, 3)}, linear ${li.g >= 0 ? '+' : ''}${fmt(li.g, 3)}, intermediate ${im.g >= 0 ? '+' : ''}${fmt(im.g, 3)}). Both instruments agree: the synergy is there, but ${n} patients are not enough to use it.`);
+        parts.push(`Prediction read-out (${M_LABEL[metric]}): no fusion model gains reliably over the best single layer at n = ${n} (non-linear ${nl.g >= 0 ? '+' : ''}${fmt(nl.g, 3)}, linear ${li.g >= 0 ? '+' : ''}${fmt(li.g, 3)}, intermediate ${im.g >= 0 ? '+' : ''}${fmt(im.g, 3)}). Both instruments agree: the synergy is there, but ${n} patients are not enough to use it.`);
       }
       // winners
       const wn = resm.winners || {};
