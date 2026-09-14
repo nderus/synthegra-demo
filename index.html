@@ -134,9 +134,15 @@
   <!-- ---------------------------------------------------------------- story 2 -->
   <section class="story" id="resolution">
     <h2>Can you measure synergy at your cohort size?</h2>
-    <p class="lead">The planted synergy is identical at every cohort size: same generator, same two cross-layer interactions. Two independent instruments read it. Top: an information-theoretic estimate (partial information decomposition). Bottom: the predictive gain a fusion model gets over the best single layer. Both read more as cohorts grow. The truth does not change; the resolution does.</p>
+    <p class="lead">One planted structure, the tab-1 cell “very strong synergy, 25 % shared”, simulated at cohort sizes from 100 to 3000. The truth is identical at every size. Two independent instruments read it. Top: an information-theoretic estimate of synergy (partial information decomposition). Bottom: what a fusion model gains over the best single layer. Lines are the average over simulated cohorts, bands the middle half of them. Watch both unlock as the cohort grows.</p>
     <div class="grid">
       <div class="panel">
+        <h3>Planted structure</h3>
+        <select id="sel-structure" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:.92rem;margin-bottom:12px">
+          <option value="tab1">Tab-1 cell: very strong synergy, 25 % shared</option>
+          <option value="paper">Paper sweep: K = 16, λ = 10 (figure 5)</option>
+        </select>
+        <label style="display:flex;gap:8px;align-items:center;font-size:.9rem;margin:-4px 0 12px"><input type="checkbox" id="chk-seeds"> show every simulated cohort</label>
         <h3>Your cohort</h3>
         <div class="slider">
           <label><span>Patients</span><b id="v-nres"></b></label>
@@ -146,11 +152,11 @@
         <h3>Read-out 1 · information</h3>
         <div class="stat">
           <div><b id="st-mean" class="num">–</b><span>measured synergy (bits), mean</span></div>
-          <div><b id="st-spread" class="num">–</b><span>2.5–97.5 % across seeds</span></div>
+          <div><b id="st-spread" class="num">–</b><span>middle half of seeds</span></div>
         </div>
         <h3>Read-out 2 · prediction</h3>
         <div class="stat" id="st-models"></div>
-        <small style="color:var(--grey)" id="st-models-note">Gain over the best single layer in the selected metric (positive = better), mean and seed range.</small>
+        <small style="color:var(--grey)" id="st-models-note">Gain over the best single layer in the selected metric (positive = better): mean and middle half of seeds.</small>
       </div>
       <div>
         <div class="panel"><div id="chart-res" class="chart"></div></div>
@@ -159,7 +165,7 @@
       </div>
     </div>
     <details><summary>Why this matters</summary><div class="body">
-      <p>If the interval of the information read-out includes zero at your cohort size, a null result on synergy is uninformative: the instrument cannot resolve it. The prediction read-out asks a more practical question: can a model turn that synergy into better risk ranking? Its linear line is the control. A linear model cannot use interactions, so any gain it shows comes from more data, not from synergy. Synergy in real cancer cohorts appears to be real but focal, concentrated in a few driver-gene interactions; both read-outs say it becomes usable only as cohorts grow.</p>
+      <p>If the band of the information read-out touches zero at your cohort size, a null result on synergy is uninformative: the instrument cannot resolve it. The prediction read-out asks the practical question: can a model turn that synergy into better risk ranking? Its linear line is the control: a linear model cannot use interactions, so any gain it shows comes from the second layer's unique information, not from synergy. The neural intermediate fusion is the model built to use interactions; its advantage appears only past a certain cohort size, and that size is the practical resolution limit. The paper-sweep option shows the same two read-outs on a harsher structure (many latent factors, dominant interaction terms) where nothing unlocks below a few thousand patients.</p>
     </div></details>
     <details><summary>How these numbers were computed</summary><div class="body"><div id="prov-res">…</div><div id="prov-resm"></div></div></details>
   </section>
@@ -336,60 +342,73 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
   drawFusion();
 
   // =============================================================== story 2
-  let resm = null;
+  let tab2 = null, resm = null;
+  try { tab2 = await fetch('data/tab2.json').then(r => r.ok ? r.json() : null); } catch (e) { tab2 = null; }
   try { resm = await fetch('data/resolution_models.json').then(r => r.ok ? r.json() : null); } catch (e) { resm = null; }
-  if (!resm) $('panel-resm').hidden = true;
+  // normalise both structures to {n, pidBits, pidMi, models:{per_seed, per_seed_ibs}, winners, seeds, provenance, title}
+  const STRUCT = {};
+  if (tab2) STRUCT.tab1 = { n: tab2.n, pidBits: Object.fromEntries(tab2.n.map(n => [n, tab2.pid[n].bits])), pidMi: Object.fromEntries(tab2.n.map(n => [n, tab2.pid[n].mi])),
+    per_seed: tab2.per_seed, per_seed_ibs: tab2.per_seed_ibs, winners: tab2.winners, seeds: tab2.seeds, provenance: tab2.provenance_html,
+    title: 'Same planted synergy at every n (tab-1 structure): only the measurement changes' };
+  STRUCT.paper = { n: res.n, pidBits: res.per_seed, pidMi: res.mi || null, per_seed: resm ? resm.per_seed : null, per_seed_ibs: resm ? resm.per_seed_ibs : null,
+    winners: resm ? resm.winners : {}, seeds: resm ? resm.seeds : 0, provenance: (res.provenance_html || '') + (resm ? resm.provenance_html : ''),
+    title: 'Same planted synergy at every n (paper sweep): only the measurement changes' };
+  const sel = $('sel-structure');
+  if (!STRUCT.tab1) { sel.value = 'paper'; sel.querySelector('option[value="tab1"]').disabled = true; }
+  const cur = () => STRUCT[sel.value] || STRUCT.paper;
+  sel.addEventListener('change', () => { $('prov-res').innerHTML = cur().provenance; drawRes(); });
+  if (!(cur().per_seed)) $('panel-resm').hidden = true;
 
-  const rn = res.n;
-  const per = res.per_seed;
-  const q = (arr, p) => { const s = [...arr].sort((a, b) => a - b); const i = (s.length - 1) * p; const lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); };
-  const meanOf = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
-  const mean = rn.map(n => meanOf(per[n])), lo = rn.map(n => q(per[n], 0.025)), hi = rn.map(n => q(per[n], 0.975));
-  const miMean = res.mi ? rn.map(n => meanOf(res.mi[n])) : null;
+  const q = (arr, p) => { const s = [...arr].filter(Number.isFinite).sort((a, b) => a - b); if (!s.length) return NaN; const i = (s.length - 1) * p; const lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); };
+  const meanOf = (arr) => { const v = arr.filter(Number.isFinite); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : NaN; };
   const interp = (xs, ys, x) => {
     if (x <= xs[0]) return ys[0]; if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
     let i = 0; while (xs[i + 1] < x) i++;
     const t = (x - xs[i]) / (xs[i + 1] - xs[i]); return ys[i] + t * (ys[i + 1] - ys[i]);
   };
-  const xmax = Math.max(rn[rn.length - 1], resm ? resm.n[resm.n.length - 1] : 0) * 1.03;
-
-  // model read-out: gains over best single layer, per seed
   const MODS = [['early_linear', 'Early fusion, linear', '#99AB9F'], ['early_nonlinear', 'Early fusion, non-linear', '#2F434A'], ['intermediate', 'Intermediate fusion (best neural)', '#BD2B0B']];
-  function computeGains(which) {
-    if (!resm) return null;
-    const src = which === 'ibs' ? resm.per_seed_ibs : resm.per_seed;
+  function computeGains(S, which) {
+    const src = which === 'ibs' ? S.per_seed_ibs : S.per_seed;
     if (!src) return null;
     const sgn = which === 'ibs' ? -1 : 1;
     const out = {};
     for (const [k] of MODS) {
       out[k] = { mean: [], lo: [], hi: [] };
-      for (const n of resm.n) {
+      for (const n of S.n) {
         const g = src[n][k].map((v, i) => (v === null || src[n].best_single[i] === null) ? NaN : sgn * (v - src[n].best_single[i])).filter(Number.isFinite);
-        out[k].mean.push(meanOf(g)); out[k].lo.push(q(g, 0.025)); out[k].hi.push(q(g, 0.975));
+        out[k].mean.push(meanOf(g)); out[k].lo.push(q(g, 0.25)); out[k].hi.push(q(g, 0.75));
       }
     }
     return out;
   }
-  const gainsBy = { c: computeGains('c'), ibs: computeGains('ibs') };
 
   function drawRes() {
     if (!isVisible('chart-res')) return;
+    const S = cur();
+    const rn = S.n, per = S.pidBits;
+    const nModels = S.per_seed ? S.n[S.n.length - 1] : rn[rn.length - 1];
+    const nCut = Math.min(rn[rn.length - 1], nModels);            // both panels share the x-range
+    const rnc = rn.filter(n => n <= nCut);
+    const mean = rnc.map(n => meanOf(per[n])), lo = rnc.map(n => q(per[n], 0.25)), hi = rnc.map(n => q(per[n], 0.75));
+    const miMean = S.pidMi ? rnc.map(n => meanOf(S.pidMi[n])) : null;
+    const xmax = nCut * 1.04;
+    const showSeeds = $('chk-seeds').checked;
     const n = +$('s-nres').value;
     $('v-nres').textContent = n;
-    const m = interp(rn, mean, n), l = interp(rn, lo, n), h = interp(rn, hi, n);
+    const m = interp(rnc, mean, n), l = interp(rnc, lo, n), h = interp(rnc, hi, n);
     $('st-mean').textContent = fmt(m, 3);
     $('st-spread').textContent = `${fmt(l, 3)} – ${fmt(h, 3)}`;
-    const pts = rn.flatMap(nn => per[nn].map(v => ({ x: nn, y: v })));
+    const pts = rnc.flatMap(nn => per[nn].map(v => ({ x: nn, y: v })));
     const traces = [
-      { type: 'scatter', mode: 'markers', x: pts.map(p => p.x), y: pts.map(p => p.y), marker: { color: '#99AB9F', size: 6, opacity: .55 }, name: 'one seed', hovertemplate: 'n = %{x}<br>S = %{y:.3f} bits<extra></extra>' },
-      { type: 'scatter', mode: 'lines', x: [...rn, ...[...rn].reverse()], y: [...hi, ...[...lo].reverse()], fill: 'toself', fillcolor: 'rgba(47,67,74,.12)', line: { width: 0 }, hoverinfo: 'skip', showlegend: false },
-      { type: 'scatter', mode: 'lines+markers', x: rn, y: mean, line: { color: '#2F434A', width: 2.5 }, marker: { size: 7, color: '#2F434A' }, name: 'measured synergy, mean', hovertemplate: 'n = %{x}<br>mean S = %{y:.3f} bits<extra></extra>' },
+      ...(showSeeds ? [{ type: 'scatter', mode: 'markers', x: pts.map(p => p.x), y: pts.map(p => p.y), marker: { color: '#99AB9F', size: 6, opacity: .55 }, name: 'one simulated cohort', hovertemplate: 'n = %{x}<br>S = %{y:.3f} bits<extra></extra>' }] : []),
+      { type: 'scatter', mode: 'lines', x: [...rnc, ...[...rnc].reverse()], y: [...hi, ...[...lo].reverse()], fill: 'toself', fillcolor: 'rgba(47,67,74,.14)', line: { width: 0 }, hoverinfo: 'skip', showlegend: true, name: 'middle half of cohorts' },
+      { type: 'scatter', mode: 'lines+markers', x: rnc, y: mean, line: { color: '#2F434A', width: 2.5 }, marker: { size: 7, color: '#2F434A' }, name: 'measured synergy, mean', hovertemplate: 'n = %{x}<br>mean S = %{y:.3f} bits<extra></extra>' },
       { type: 'scatter', mode: 'markers', x: [n], y: [m], marker: { color: '#BD2B0B', size: 14, symbol: 'diamond' }, name: 'your cohort', hovertemplate: 'your n = %{x}<br>S ≈ %{y:.3f}<extra></extra>' },
     ];
-    if (miMean) traces.push({ type: 'scatter', mode: 'lines+markers', x: rn, y: miMean, yaxis: 'y2', line: { color: '#6f8fbf', width: 1.5, dash: 'dot' }, marker: { size: 5, color: '#6f8fbf' }, name: 'total information recovered', hovertemplate: 'n = %{x}<br>total MI = %{y:.2f} bits<extra></extra>' });
+    if (miMean) traces.push({ type: 'scatter', mode: 'lines+markers', x: rnc, y: miMean, yaxis: 'y2', line: { color: '#6f8fbf', width: 1.5, dash: 'dot' }, marker: { size: 5, color: '#6f8fbf' }, name: 'total information recovered', hovertemplate: 'n = %{x}<br>total MI = %{y:.2f} bits<extra></extra>' });
     Plotly.react('chart-res', traces, {
       ...layoutBase, margin: { l: 56, r: 64, t: 28, b: 110 }, showlegend: true, legend: { orientation: 'h', y: -0.32, font: { size: 11 } },
-      title: { text: res.title || 'Read-out 1 · measured synergy (PID)', font: { size: 14 }, x: 0 },
+      title: { text: S.title, font: { size: 14 }, x: 0 },
       xaxis: { title: 'cohort size n', gridcolor: '#eee', range: [0, xmax] },
       yaxis: { title: 'measured synergy (bits)', gridcolor: '#eee', rangemode: 'tozero' },
       yaxis2: miMean ? { title: { text: 'total MI (bits)', font: { color: '#6f8fbf', size: 11 } }, overlaying: 'y', side: 'right', rangemode: 'tozero', showgrid: false, tickfont: { color: '#6f8fbf', size: 10 } } : undefined,
@@ -397,21 +416,22 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
     }, cfg);
 
     const parts = [];
-    if (l <= 0.005) parts.push(`Information read-out at n = ${n}: the seed range reaches zero, so a null synergy result would be uninformative. The estimator cannot resolve it.`);
-    else if ((h - l) > m) parts.push(`Information read-out at n = ${n}: synergy is detectable on average (≈ ${fmt(m, 3)} bits) but the seed range is wider than the estimate. Single-cohort readings will disagree.`);
-    else parts.push(`Information read-out at n = ${n}: ≈ ${fmt(m, 3)} bits with a range narrower than the estimate. A single cohort gives a usable reading.`);
+    if (l <= 0.005) parts.push(`Information read-out at n = ${n}: at least a quarter of the simulated cohorts read zero synergy, so a null result would be uninformative. The estimator cannot resolve it at this size.`);
+    else if ((h - l) > m) parts.push(`Information read-out at n = ${n}: synergy is detectable on average (≈ ${fmt(m, 3)} bits) but cohorts disagree by more than the estimate itself.`);
+    else parts.push(`Information read-out at n = ${n}: ≈ ${fmt(m, 3)} bits, and most cohorts agree. A single cohort gives a usable reading.`);
 
-    const gains = gainsBy[metric] || gainsBy.c;
+    const gains = computeGains(S, metric) || computeGains(S, 'c');
+    $('panel-resm').hidden = !gains;
     if (gains) {
       const rows = MODS.map(([k, label, col]) => {
-        const g = interp(resm.n, gains[k].mean, n), gl = interp(resm.n, gains[k].lo, n), gh = interp(resm.n, gains[k].hi, n);
+        const g = interp(S.n, gains[k].mean, n), gl = interp(S.n, gains[k].lo, n), gh = interp(S.n, gains[k].hi, n);
         return { k, label, col, g, gl, gh };
       });
       $('st-models').innerHTML = rows.map(r => `<div><b class="num" style="color:${r.col}">${r.g >= 0 ? '+' : ''}${fmt(r.g, 3)}</b><span>${r.label}<br>${fmt(r.gl, 3)} – ${fmt(r.gh, 3)}</span></div>`).join('');
       const tr = [];
       for (const r of rows) {
-        tr.push({ type: 'scatter', mode: 'lines', x: [...resm.n, ...[...resm.n].reverse()], y: [...gains[r.k].hi, ...[...gains[r.k].lo].reverse()], fill: 'toself', fillcolor: r.col + '22', line: { width: 0 }, hoverinfo: 'skip', showlegend: false });
-        tr.push({ type: 'scatter', mode: 'lines+markers', x: resm.n, y: gains[r.k].mean, line: { color: r.col, width: 2.5 }, marker: { size: 7, color: r.col }, name: r.label, hovertemplate: `${r.label}<br>n = %{x}<br>gain %{y:+.3f}<extra></extra>` });
+        tr.push({ type: 'scatter', mode: 'lines', x: [...S.n, ...[...S.n].reverse()], y: [...gains[r.k].hi, ...[...gains[r.k].lo].reverse()], fill: 'toself', fillcolor: r.col + '26', line: { width: 0 }, hoverinfo: 'skip', showlegend: false });
+        tr.push({ type: 'scatter', mode: 'lines+markers', x: S.n, y: gains[r.k].mean, line: { color: r.col, width: 2.5 }, marker: { size: 7, color: r.col }, name: r.label, hovertemplate: `${r.label}<br>n = %{x}<br>gain %{y:+.3f}<extra></extra>` });
       }
       tr.push({ type: 'scatter', mode: 'markers', x: rows.map(() => n), y: rows.map(r => r.g), marker: { color: rows.map(r => r.col), size: 12, symbol: 'diamond', line: { color: '#fff', width: 1 } }, name: 'your cohort', showlegend: false, hoverinfo: 'skip' });
       Plotly.react('chart-resm', tr, {
@@ -423,27 +443,29 @@ window.addEventListener('unhandledrejection', e => { const m = document.querySel
       }, cfg);
       const nl = rows.find(r => r.k === 'early_nonlinear'), li = rows.find(r => r.k === 'early_linear'), im = rows.find(r => r.k === 'intermediate');
       const usable = (r) => r && r.gl > 0;
+      const unlockN = (() => { for (let i = 0; i < S.n.length; i++) if (gains.intermediate.lo[i] > 0) return S.n[i]; return null; })();
       const bestR = (im && nl) ? (im.g > nl.g ? im : nl) : (im || nl);
       const dInt = nl && li ? nl.g - li.g : 0;
-      if (usable(nl) || usable(im)) {
-        let msg = `Prediction read-out (${M_LABEL[metric]}): ${bestR.label.toLowerCase()} gains +${fmt(bestR.g, 3)} over the best single layer (seed range ${fmt(bestR.gl, 3)} to ${fmt(bestR.gh, 3)}); the linear control gains ${li.g >= 0 ? '+' : ''}${fmt(li.g, 3)}.`;
+      if (usable(nl) || usable(im)) {   // usable = the middle half of cohorts is above zero
+        let msg = `Prediction read-out (${M_LABEL[metric]}): ${bestR.label.toLowerCase()} gains +${fmt(bestR.g, 3)} over the best single layer (middle half of cohorts ${fmt(bestR.gl, 3)} to ${fmt(bestR.gh, 3)}); the linear control gains ${li.g >= 0 ? '+' : ''}${fmt(li.g, 3)}.`;
         msg += dInt > 0.01
           ? ` The non-linear model is ahead of the linear one by +${fmt(dInt, 3)}: part of the gain comes from the interaction itself.`
           : ` The linear control gains about as much, so what is gained here is the second layer's unique information, not the interaction. The planted synergy is still not usable at this size.`;
         parts.push(msg);
+        if (unlockN) parts.push(`In this structure the intermediate model's advantage becomes reliable from about n = ${unlockN}.`);
       } else {
-        parts.push(`Prediction read-out (${M_LABEL[metric]}): no fusion model gains reliably over the best single layer at n = ${n} (non-linear ${nl.g >= 0 ? '+' : ''}${fmt(nl.g, 3)}, linear ${li.g >= 0 ? '+' : ''}${fmt(li.g, 3)}, intermediate ${im.g >= 0 ? '+' : ''}${fmt(im.g, 3)}). Both instruments agree: the synergy is there, but ${n} patients are not enough to use it.`);
+        parts.push(`Prediction read-out (${M_LABEL[metric]}): no fusion model gains reliably over the best single layer at n = ${n} (non-linear ${nl.g >= 0 ? '+' : ''}${fmt(nl.g, 3)}, linear ${li.g >= 0 ? '+' : ''}${fmt(li.g, 3)}, intermediate ${im.g >= 0 ? '+' : ''}${fmt(im.g, 3)}). Both instruments agree: the synergy is there, but ${n} patients are not enough to use it.` + (unlockN ? ` In this structure it unlocks from about n = ${unlockN}.` : ''));
       }
       // winners
-      const wn = resm.winners || {};
-      const summary = resm.n.map(nn => { const w = wn[nn] || {}; const top = Object.entries(w).sort((a, b) => b[1] - a[1])[0]; return top ? `n = ${nn}: ${top[0].replace('intermediate_', '')} (${top[1]}/${resm.seeds})` : null; }).filter(Boolean);
+      const wn = S.winners || {};
+      const summary = S.n.map(nn => { const w = wn[nn] || {}; const top = Object.entries(w).sort((a, b) => b[1] - a[1])[0]; return top ? `n = ${nn}: ${top[0].replace('intermediate_', '')} (${top[1]}/${S.seeds})` : null; }).filter(Boolean);
       $('resm-winners').textContent = summary.length ? 'Best intermediate architecture by validation C-index, per cohort size: ' + summary.join(' · ') : '';
     }
     $('take-res').textContent = parts.join(' ');
   }
   $('s-nres').addEventListener('input', drawRes);
-  $('prov-res').innerHTML = res.provenance_html || '';
-  if (resm) $('prov-resm').innerHTML = resm.provenance_html || '';
+  $('chk-seeds').addEventListener('change', drawRes);
+  $('prov-res').innerHTML = cur().provenance;
   drawRes();
 
   window.__redraw = () => { drawFusion(); drawRes(); };
