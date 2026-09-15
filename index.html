@@ -200,8 +200,9 @@
 </footer>
 
 <script>
-window.addEventListener('error', e => { const m = document.querySelector('main'); if (m) m.insertAdjacentHTML('afterbegin', '<p class="warn" id="jserr">Page script error: ' + e.message + ' (line ' + e.lineno + ')</p>'); });
-window.addEventListener('unhandledrejection', e => { const m = document.querySelector('main'); if (m) m.insertAdjacentHTML('afterbegin', '<p class="warn" id="jserr">Page script error: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason) + '</p>'); });
+const ownError = (src) => !src || src.includes(location.host) || src.startsWith(location.origin);
+window.addEventListener('error', e => { if (!ownError(e.filename)) return; const m = document.querySelector('main'); if (m) m.insertAdjacentHTML('afterbegin', '<p class="warn" id="jserr">Page script error: ' + e.message + ' (line ' + e.lineno + ')</p>'); });
+window.addEventListener('unhandledrejection', e => { const st = (e.reason && e.reason.stack) ? String(e.reason.stack) : String(e.reason); if (/webkit-masked-url|extension:\/\//.test(st)) return; const m = document.querySelector('main'); if (m) m.insertAdjacentHTML('afterbegin', '<p class="warn" id="jserr">Page script error: ' + st + '</p>'); });
 (async function () {
   const $ = (id) => document.getElementById(id);
   const fmt = (x, d = 2) => (x === null || x === undefined || Number.isNaN(x)) ? '–' : Number(x).toFixed(d);
